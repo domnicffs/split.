@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Split</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+  :root {
+    --bg: #0a0a0a; --surface: #111111; --surface2: #1a1a1a; --border: #222222;
+    --accent: #c8f135; --accent2: #f1a035; --text: #f0f0f0; --muted: #555555;
+    --danger: #ff4d4d; --radius: 14px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; min-height:100vh; overflow-x:hidden; }
+
+  /* BOTTOM NAV */
+  .bottom-nav { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); display:flex; z-index:50; padding-bottom:env(safe-area-inset-bottom,0); }
+  .nav-btn { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:10px 0; background:none; border:none; color:var(--muted); font-family:'Inter',sans-serif; font-size:10px; cursor:pointer; transition:color 0.15s; text-transform:uppercase; }
+  .nav-btn svg { width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .nav-btn.active { color:var(--accent); }
+  .nav-btn.active svg { stroke:var(--accent); }
+
+  /* VIEWS */
+  .view { display:none; padding-bottom:80px; }
+  .view.active { display:block; }
+
+  /* HEADER */
+  .header { padding:20px 20px 0; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .header-left { display:flex; align-items:center; gap:10px; }
+  .header-logo-img { width:32px; height:32px; border-radius:8px; object-fit:contain; }
+  .logo { font-family:'Inter',sans-serif; font-weight:800; font-size:26px; letter-spacing:-1.5px; color:var(--accent); }
+  .logo span { color:var(--text); }
+  .header-right { text-align:right; flex-shrink:0; }
+  .header-group-name { font-family:'Inter',sans-serif; font-weight:600; font-size:14px; color:var(--text); margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
+  .period-badge { display:inline-block; font-size:11px; color:var(--muted); cursor:pointer; padding:2px 0; }
+  .period-badge:hover { color:var(--accent); }
+
+  /* TABS */
+  .tabs-wrap { padding:16px 20px 0; display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; }
+  .tabs-wrap::-webkit-scrollbar { display:none; }
+  .tab { display:flex; align-items:center; gap:6px; padding:8px 16px; border-radius:30px; border:1px solid var(--border); background:var(--surface); font-family:'Inter',sans-serif; font-size:13px; color:var(--muted); cursor:pointer; white-space:nowrap; transition:all 0.2s; flex-shrink:0; }
+  .tab.active { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
+  .tab .dot { width:7px; height:7px; border-radius:50%; background:currentColor; opacity:0.5; }
+  .tab.active .dot { opacity:1; }
+  .add-person-tab { padding:8px 14px; border-radius:30px; border:1px dashed var(--border); background:transparent; color:var(--muted); font-size:20px; cursor:pointer; flex-shrink:0; transition:all 0.2s; }
+  .add-person-tab:hover { border-color:var(--accent); color:var(--accent); }
+  .tab-hint { font-size:10px; color:var(--muted); text-align:center; margin-top:8px; }
+
+  /* SUMMARY */
+  .summary-strip { margin:16px 20px 0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; display:flex; justify-content:space-between; align-items:center; }
+  .summary-item { text-align:center; flex:1; }
+  .summary-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .summary-val { font-family:'Inter',sans-serif; font-weight:700; font-size:20px; margin-top:2px; color:var(--accent); }
+  .summary-divider { width:1px; background:var(--border); height:32px; flex-shrink:0; margin:0 4px; }
+
+  /* BALANCE CARD */
+  .balance-outer { margin:12px 20px 0; }
+  .balance-card { border-radius:var(--radius); padding:14px 16px; font-size:13px; display:flex; align-items:flex-start; gap:10px; }
+  .balance-card.owes { background:rgba(255,77,77,0.1); border:1px solid rgba(255,77,77,0.25); }
+  .balance-card.even { background:var(--surface); border:1px solid var(--border); }
+  .balance-icon { font-size:20px; flex-shrink:0; }
+  .balance-text { flex:1; line-height:1.8; color:var(--text); }
+
+  /* SETTLE BTN */
+  .settle-section { margin:12px 20px 0; }
+  .settle-btn { width:100%; background:transparent; color:var(--accent2); border:1px solid var(--accent2); border-radius:var(--radius); padding:13px; font-family:'Inter',sans-serif; font-weight:700; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; }
+
+  /* ADD SECTION */
+  .add-section { margin:16px 20px 0; }
+  .add-btn { width:100%; background:var(--accent); color:#000; border:none; border-radius:var(--radius); padding:14px; font-family:'Inter',sans-serif; font-weight:700; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:opacity 0.15s; }
+  .add-btn:active { opacity:0.8; }
+
+  /* FORM */
+  .form-panel { margin:10px 20px 0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; display:none; flex-direction:column; gap:12px; animation:slideDown 0.2s ease; }
+  .form-panel.open { display:flex; }
+  @keyframes slideDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+  .form-group { display:flex; flex-direction:column; gap:6px; }
+  .form-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+  .form-input { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-family:'Inter',sans-serif; font-size:14px; color:var(--text); outline:none; transition:border-color 0.2s; width:100%; }
+  .form-input:focus { border-color:var(--accent); }
+  .form-input::placeholder { color:var(--muted); }
+  .form-actions { display:flex; gap:8px; }
+  .btn-save { flex:1; background:var(--accent); color:#000; border:none; border-radius:10px; padding:12px; font-family:'Inter',sans-serif; font-weight:700; font-size:14px; cursor:pointer; }
+  .btn-cancel { background:var(--surface2); color:var(--muted); border:1px solid var(--border); border-radius:10px; padding:12px 18px; font-family:'Inter',sans-serif; font-size:14px; cursor:pointer; }
+
+  /* PAYER SELECTOR */
+  .payer-selector { display:flex; gap:8px; flex-wrap:wrap; }
+  .payer-btn { flex:1; min-width:60px; padding:8px 10px; border-radius:10px; border:1px solid var(--border); background:var(--surface2); font-family:'Inter',sans-serif; font-size:12px; color:var(--muted); cursor:pointer; text-align:center; transition:all 0.15s; white-space:nowrap; }
+  .payer-btn.selected { border-color:var(--accent); color:#000; background:var(--accent); font-weight:600; }
+
+  /* ENTRIES */
+  .entries-section { margin:16px 20px 0; }
+  .entries-header { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:10px; }
+  .entry-item { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:8px; display:flex; align-items:center; gap:12px; animation:fadeIn 0.2s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:translateX(0)} }
+  .entry-left { flex:1; min-width:0; }
+  .entry-desc { font-size:14px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:3px; }
+  .entry-date { font-size:11px; color:var(--muted); }
+  .entry-amount { font-family:'Inter',sans-serif; font-weight:700; font-size:16px; color:var(--accent2); flex-shrink:0; }
+  .entry-actions { display:flex; gap:2px; flex-shrink:0; }
+  .entry-delete, .entry-edit { background:none; border:none; font-size:15px; cursor:pointer; padding:5px 6px; line-height:1; flex-shrink:0; transition:color 0.15s; border-radius:6px; }
+  .entry-delete { color:var(--muted); }
+  .entry-delete:hover { color:var(--danger); background:rgba(255,77,77,0.1); }
+  .entry-edit { color:var(--muted); }
+  .entry-edit:hover { color:var(--accent); background:rgba(200,241,53,0.1); }
+  .running-total { background:var(--surface2); border-radius:10px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border:1px solid var(--border); }
+  .rt-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+  .rt-val { font-family:'Inter',sans-serif; font-weight:800; font-size:22px; color:var(--accent); }
+  .empty-state { text-align:center; padding:40px 20px; color:var(--muted); font-size:13px; line-height:2; }
+  .empty-icon { font-size:36px; margin-bottom:8px; }
+  .no-people { margin:40px 20px; text-align:center; color:var(--muted); font-size:13px; line-height:2; }
+  .no-people-btn { margin-top:16px; background:var(--accent); color:#000; border:none; border-radius:var(--radius); padding:13px 28px; font-family:'Inter',sans-serif; font-weight:700; font-size:15px; cursor:pointer; }
+
+  /* OVERVIEW */
+  .overview-section { margin:16px 20px 0; }
+  .ov-totals-cols { margin-bottom:20px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; display:flex; align-items:center; justify-content:space-around; }
+  .ov-col { flex:1; text-align:center; }
+  .ov-col-name { margin-bottom:6px; }
+  .ov-col-val { font-family:'Inter',sans-serif; font-weight:700; font-size:20px; color:var(--accent); }
+  .ov-col-divider { width:1px; background:var(--border); height:40px; flex-shrink:0; margin:0 4px; }
+  .person-pill { display:inline-block; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:500; }
+  .ov-table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow-x:auto; margin-bottom:20px; }
+  .ov-table { width:100%; border-collapse:collapse; font-size:12px; min-width:320px; }
+  .ov-table th { padding:10px 12px; text-align:left; font-family:'Inter',sans-serif; font-size:11px; font-weight:500; color:var(--text); border-bottom:2px solid var(--border); border-right:1px solid var(--border); white-space:nowrap; }
+  .ov-table th:last-child { border-right:none; }
+  .ov-table th.th-person { text-align:center; border-top:3px solid var(--pcol); }
+  .ov-table td { padding:9px 12px; border-bottom:1px solid var(--border); border-right:1px solid var(--border); font-family:'Inter',sans-serif; vertical-align:middle; font-size:12px; }
+  .ov-table td:last-child { border-right:none; }
+  .ov-table tbody tr:last-child td { border-bottom:none; }
+  .ov-table tbody tr:hover td { background:var(--surface2); }
+  .ov-td-date { color:var(--muted); font-size:11px; white-space:nowrap; }
+  .ov-td-desc { color:var(--text); }
+  .ov-td-amount { font-family:'Inter',sans-serif; font-weight:700; font-size:13px; color:var(--accent2); white-space:nowrap; text-align:right; }
+  .ov-td-empty { color:var(--border); text-align:center; }
+  .ov-table tfoot tr { border-top:2px solid var(--border); background:var(--surface2); }
+  .ov-table tfoot td { padding:10px 12px; font-family:'Inter',sans-serif; font-weight:700; font-size:13px; }
+  .ov-tfoot-label { color:var(--muted); font-size:10px; font-family:'Inter',sans-serif; text-transform:uppercase; letter-spacing:1px; }
+  .ov-tfoot-total { text-align:right; color:var(--accent); }
+  .ov-section-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:10px; }
+
+  /* GROUPS VIEW */
+  .groups-header { padding:20px 20px 0; }
+  .groups-title { font-family:'Inter',sans-serif; font-weight:800; font-size:28px; letter-spacing:-1.5px; color:var(--accent); margin-bottom:4px; }
+  .groups-title span { color:var(--text); }
+  .groups-subtitle { font-size:12px; color:var(--muted); }
+  .groups-list { margin:20px 20px 0; display:flex; flex-direction:column; gap:10px; }
+  .group-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; display:flex; align-items:center; gap:14px; cursor:pointer; transition:border-color 0.2s; }
+  .group-card:hover, .group-card.active-group { border-color:var(--accent); }
+  .group-card.active-group { background:rgba(200,241,53,0.06); }
+  .group-icon { width:42px; height:42px; border-radius:12px; background:var(--surface2); display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+  .group-info { flex:1; min-width:0; }
+  .group-name { font-size:15px; font-weight:600; color:var(--text); margin-bottom:3px; }
+  .group-meta { font-size:11px; color:var(--muted); }
+  .group-active-badge { background:var(--accent); color:#000; font-size:10px; font-weight:700; padding:3px 8px; border-radius:20px; flex-shrink:0; }
+  .group-actions { display:flex; gap:6px; flex-shrink:0; }
+  .group-edit-btn, .group-del-btn { background:none; border:none; font-size:16px; cursor:pointer; padding:4px 6px; border-radius:6px; color:var(--muted); transition:all 0.15s; }
+  .group-edit-btn:hover { color:var(--accent); background:rgba(200,241,53,0.1); }
+  .group-del-btn:hover { color:var(--danger); background:rgba(255,77,77,0.1); }
+  .new-group-btn { margin:16px 20px 0; width:calc(100% - 40px); background:transparent; border:1px dashed var(--border); border-radius:var(--radius); padding:14px; font-family:'Inter',sans-serif; font-weight:600; font-size:14px; color:var(--muted); cursor:pointer; transition:all 0.2s; }
+  .new-group-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .open-group-btn { margin:16px 20px 0; width:calc(100% - 40px); background:var(--accent); color:#000; border:none; border-radius:var(--radius); padding:14px; font-family:'Inter',sans-serif; font-weight:700; font-size:15px; cursor:pointer; }
+
+  /* SETTINGS VIEW */
+  .settings-section { margin:20px 20px 0; }
+  .settings-title { font-size:22px; font-weight:700; color:var(--text); margin-bottom:4px; }
+  .settings-sub { font-size:12px; color:var(--muted); margin-bottom:24px; }
+  .settings-group-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:10px; }
+  .settings-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; margin-bottom:24px; }
+  .settings-row { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--border); }
+  .settings-row:last-child { border-bottom:none; }
+  .settings-row-left { flex:1; }
+  .settings-row-title { font-size:14px; color:var(--text); font-weight:500; margin-bottom:2px; }
+  .settings-row-desc { font-size:11px; color:var(--muted); }
+  .settings-btn { padding:8px 16px; border-radius:8px; font-family:'Inter',sans-serif; font-size:13px; font-weight:600; cursor:pointer; border:none; white-space:nowrap; }
+  .settings-btn.danger { background:rgba(255,77,77,0.15); color:var(--danger); border:1px solid rgba(255,77,77,0.3); }
+  .settings-btn.normal { background:var(--surface2); color:var(--text); border:1px solid var(--border); }
+
+  /* MODALS */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; display:none; align-items:flex-end; justify-content:center; }
+  .modal-overlay.open { display:flex; }
+  .modal { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius) var(--radius) 0 0; padding:24px 20px 40px; width:100%; animation:slideUp 0.25s ease; }
+  @keyframes slideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .modal-title { font-family:'Inter',sans-serif; font-weight:700; font-size:18px; margin-bottom:16px; }
+  .modal-actions { display:flex; gap:8px; margin-top:16px; }
+  .btn-primary { flex:1; background:var(--accent); color:#000; border:none; border-radius:10px; padding:13px; font-family:'Inter',sans-serif; font-weight:700; font-size:15px; cursor:pointer; }
+  .btn-secondary { background:var(--surface2); color:var(--muted); border:1px solid var(--border); border-radius:10px; padding:13px 18px; font-family:'Inter',sans-serif; font-size:14px; cursor:pointer; }
+  .btn-danger { background:rgba(255,77,77,0.15); color:var(--danger); border:1px solid rgba(255,77,77,0.3); border-radius:10px; padding:13px 18px; font-family:'Inter',sans-serif; font-size:14px; cursor:pointer; }
+
+  .emoji-grid { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .emoji-opt { width:42px; height:42px; border-radius:10px; border:1px solid var(--border); background:var(--surface2); font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.15s; }
+  .emoji-opt.selected { border-color:var(--accent); background:rgba(200,241,53,0.15); }
+</style>
+</head>
+<body>
+
+<!-- ═══ MODALS ═══ -->
+
+<!-- GROUP MODAL -->
+<div class="modal-overlay" id="groupModal">
+  <div class="modal">
+    <div class="modal-title" id="groupModalTitle">New group</div>
+    <div class="form-group" style="margin-bottom:12px">
+      <div class="form-label">Group name</div>
+      <input class="form-input" id="groupNameInput" placeholder="e.g. Food with Vit, Holiday" maxlength="30" />
+    </div>
+    <div class="form-group">
+      <div class="form-label">Icon</div>
+      <div class="emoji-grid" id="emojiGrid"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeGroupModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveGroupModal()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- PERSON MODAL -->
+<div class="modal-overlay" id="personModal">
+  <div class="modal">
+    <div class="modal-title" id="personModalTitle">Add person</div>
+    <div class="form-group">
+      <div class="form-label">Name</div>
+      <input class="form-input" id="personNameInput" placeholder="" maxlength="20" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closePersonModal()">Cancel</button>
+      <button class="btn-danger" id="deletePersonBtn" style="display:none" onclick="deleteCurrentEditPerson()">Remove</button>
+      <button class="btn-primary" id="personModalSave" onclick="savePersonModal()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- PERIOD MODAL -->
+<div class="modal-overlay" id="periodModal">
+  <div class="modal">
+    <div class="modal-title">Period label</div>
+    <div class="form-group">
+      <div class="form-label">Label (e.g. Jan–Jun 2026)</div>
+      <input class="form-input" id="periodInput" placeholder="" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closePeriodModal()">Cancel</button>
+      <button class="btn-primary" onclick="savePeriod()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT ENTRY MODAL -->
+<div class="modal-overlay" id="editEntryModal">
+  <div class="modal">
+    <div class="modal-title">Edit entry</div>
+    <div class="form-group" style="margin-bottom:12px">
+      <div class="form-label">Date</div>
+      <input type="date" class="form-input" id="editEntryDate" />
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <div class="form-label">Description</div>
+      <input type="text" class="form-input" id="editEntryDesc" />
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <div class="form-label">Amount (£)</div>
+      <input type="number" class="form-input" id="editEntryAmount" step="0.01" min="0" inputmode="decimal" />
+    </div>
+    <div class="form-group" id="editPayerGroup" style="display:none">
+      <div class="form-label">Who owes you this?</div>
+      <div class="payer-selector" id="editPayerSelector"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeEditEntry()">Cancel</button>
+      <button class="btn-primary" onclick="saveEditEntry()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRM MODAL -->
+<div class="modal-overlay" id="deleteConfirmModal">
+  <div class="modal">
+    <div class="modal-title">Remove entry?</div>
+    <div id="deleteConfirmText" style="font-size:13px;color:var(--muted);line-height:1.8;margin-bottom:4px;"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeDeleteConfirm()">Keep it</button>
+      <button class="btn-danger" onclick="confirmDeleteExecute()">Remove</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTLE MODAL -->
+<div class="modal-overlay" id="settleModal">
+  <div class="modal">
+    <div class="modal-title">Settlement summary</div>
+    <div id="settleContent" style="font-size:13px;line-height:2;color:var(--text);"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeSettle()">Close</button>
+      <button class="btn-primary" onclick="markSettled()">Mark as settled ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL (generic) -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal">
+    <div class="modal-title" id="confirmTitle">Are you sure?</div>
+    <div id="confirmText" style="font-size:13px;color:var(--muted);line-height:1.8;margin-bottom:4px;"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeConfirm()">Cancel</button>
+      <button class="btn-danger" id="confirmOkBtn" onclick="">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ VIEWS ═══ -->
+
+<!-- GROUPS VIEW -->
+<div class="view active" id="viewGroups">
+  <div class="groups-header">
+    <div class="groups-title">split<span>.</span></div>
+    <div class="groups-subtitle">Your groups</div>
+  </div>
+  <div class="groups-list" id="groupsList"></div>
+  <button class="new-group-btn" onclick="openNewGroup()">+ New group</button>
+  <button class="open-group-btn" id="openGroupBtn" style="display:none" onclick="openActiveGroup()">Open →</button>
+</div>
+
+<!-- PEOPLE VIEW -->
+<div class="view" id="viewPeople">
+  <div class="header">
+    <div class="header-left">
+      <img src="icon.png" alt="split" class="header-logo-img" onerror="this.style.display='none'" />
+      <div class="logo">split<span>.</span></div>
+    </div>
+    <div class="header-right">
+      <div class="header-group-name" id="groupLogoName"></div>
+      <div class="period-badge" onclick="openPeriodModal()" id="periodBadge">Set period</div>
+    </div>
+  </div>
+  <div class="tabs-wrap" id="tabsWrap">
+    <button class="add-person-tab" onclick="openAddPerson()">+</button>
+  </div>
+  <div class="tab-hint" id="tabHint"></div>
+  <div id="summaryArea"></div>
+  <div class="balance-outer" id="balanceCard"></div>
+  <div id="settleArea"></div>
+  <div id="addArea"></div>
+  <div class="form-panel" id="formPanel">
+    <div class="form-group">
+      <div class="form-label">Date</div>
+      <input type="date" class="form-input" id="entryDate" />
+    </div>
+    <div class="form-group">
+      <div class="form-label">Description</div>
+      <input type="text" class="form-input" id="entryDesc" placeholder="e.g. KFC, Noodles…" />
+    </div>
+    <div class="form-group">
+      <div class="form-label">Amount (£)</div>
+      <input type="number" class="form-input" id="entryAmount" placeholder="0.00" step="0.01" min="0" inputmode="decimal" />
+    </div>
+    <div class="form-group" id="payerGroup" style="display:none">
+      <div class="form-label">Who owes you this?</div>
+      <div class="payer-selector" id="payerSelector"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-cancel" onclick="toggleForm()">Cancel</button>
+      <button class="btn-save" onclick="saveEntry()">Save entry</button>
+    </div>
+  </div>
+  <div class="entries-section" id="entriesSection"></div>
+</div>
+
+<!-- OVERVIEW VIEW -->
+<div class="view" id="viewOverview">
+  <div class="header" style="margin-bottom:0">
+    <div class="logo" style="font-size:20px;color:var(--muted);font-weight:600">Overview</div>
+  </div>
+  <div class="overview-section" id="overviewContent"></div>
+</div>
+
+<!-- SETTINGS VIEW -->
+<div class="view" id="viewSettings">
+  <div class="settings-section">
+    <div class="settings-title">Settings</div>
+    <div class="settings-sub">Manage your data</div>
+
+    <div class="settings-group-label">Current group</div>
+    <div class="settings-card" id="settingsCurrentGroup"></div>
+
+    <div class="settings-group-label">Data</div>
+    <div class="settings-card">
+      <div class="settings-row">
+        <div class="settings-row-left">
+          <div class="settings-row-title">Reset entries</div>
+          <div class="settings-row-desc">Clear all entries in the current group. People stay.</div>
+        </div>
+        <button class="settings-btn danger" onclick="confirmResetEntries()">Reset</button>
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-left">
+          <div class="settings-row-title">Delete group</div>
+          <div class="settings-row-desc">Permanently remove this group and all its data.</div>
+        </div>
+        <button class="settings-btn danger" onclick="confirmDeleteGroup()">Delete</button>
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-left">
+          <div class="settings-row-title">Reset everything</div>
+          <div class="settings-row-desc">Wipe all groups and start fresh.</div>
+        </div>
+        <button class="settings-btn danger" onclick="confirmResetAll()">Wipe all</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav" id="bottomNav" style="display:none">
+  <button class="nav-btn active" id="navPeople" onclick="switchView('people')">
+    <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    People
+  </button>
+  <button class="nav-btn" id="navOverview" onclick="switchView('overview')">
+    <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    Overview
+  </button>
+  <button class="nav-btn" id="navGroups" onclick="switchView('groups')">
+    <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+    Groups
+  </button>
+  <button class="nav-btn" id="navSettings" onclick="switchView('settings')">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    Settings
+  </button>
+</div>
+
+<script>
+  // ═══ CONSTANTS ═══
+  const PILL_COLORS = [
+    { bg:'rgba(200,241,53,0.15)', color:'#c8f135', border:'rgba(200,241,53,0.3)' },
+    { bg:'rgba(241,160,53,0.15)', color:'#f1a035', border:'rgba(241,160,53,0.3)' },
+    { bg:'rgba(100,180,255,0.15)', color:'#64b4ff', border:'rgba(100,180,255,0.3)' },
+    { bg:'rgba(200,100,255,0.15)', color:'#c864ff', border:'rgba(200,100,255,0.3)' },
+    { bg:'rgba(255,100,150,0.15)', color:'#ff6496', border:'rgba(255,100,150,0.3)' },
+  ];
+  const EMOJIS = ['🍔','🍕','🍜','✈️','🏖️','🎉','🏠','🎮','🛒','💊','🎓','💼','🏋️','🚗','🎵'];
+  function personColor(idx) { return PILL_COLORS[idx % PILL_COLORS.length]; }
+
+  // ═══ STATE ═══
+  // { activeGroupId, groups: [{ id, name, emoji, period, people: [{ id, name, entries: [{id,date,desc,amount,debtorId}] }], activePersonId }] }
+  let state = JSON.parse(localStorage.getItem('splitStateV3') || 'null') || { activeGroupId: null, groups: [] };
+
+  function save() { localStorage.setItem('splitStateV3', JSON.stringify(state)); }
+  function activeGroup() { return state.groups.find(g => g.id === state.activeGroupId) || null; }
+  function activePerson() { const g = activeGroup(); if (!g) return null; return g.people.find(p => p.id === g.activePersonId) || g.people[0] || null; }
+  function fmt(n) { return '£' + parseFloat(n||0).toFixed(2); }
+  function personTotal(p) { return (p.entries||[]).reduce((s,e) => s+parseFloat(e.amount),0); }
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function fmtDate(d) { if (!d) return ''; return new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}); }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+  // ═══ VIEW SWITCHING ═══
+  let currentView = 'groups';
+  function switchView(v) {
+    currentView = v;
+    document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+    const map = { people:'viewPeople', overview:'viewOverview', groups:'viewGroups', settings:'viewSettings' };
+    document.getElementById(map[v]).classList.add('active');
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    const navMap = { people:'navPeople', overview:'navOverview', groups:'navGroups', settings:'navSettings' };
+    document.getElementById(navMap[v])?.classList.add('active');
+    if (v === 'overview') renderOverview();
+    if (v === 'groups') renderGroups();
+    if (v === 'settings') renderSettings();
+    if (v === 'people') renderPeople();
+  }
+
+  // ═══ GROUPS VIEW ═══
+  function renderGroups() {
+    const list = document.getElementById('groupsList');
+    const openBtn = document.getElementById('openGroupBtn');
+    if (state.groups.length === 0) {
+      list.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div>No groups yet.<br>Create one to get started.</div>`;
+      openBtn.style.display = 'none';
+      return;
+    }
+    list.innerHTML = state.groups.map(g => {
+      const isActive = g.id === state.activeGroupId;
+      const totalPeople = g.people.length;
+      const totalEntries = g.people.reduce((s,p) => s+(p.entries||[]).length, 0);
+      return `<div class="group-card ${isActive?'active-group':''}" onclick="selectGroup('${g.id}')">
+        <div class="group-icon">${g.emoji||'👥'}</div>
+        <div class="group-info">
+          <div class="group-name">${escHtml(g.name)}</div>
+          <div class="group-meta">${totalPeople} ${totalPeople===1?'person':'people'} · ${totalEntries} ${totalEntries===1?'entry':'entries'}${g.period?' · '+escHtml(g.period):''}</div>
+        </div>
+        ${isActive ? '<span class="group-active-badge">Active</span>' : ''}
+        <div class="group-actions">
+          <button class="group-edit-btn" onclick="event.stopPropagation();openEditGroup('${g.id}')">✎</button>
+          <button class="group-del-btn" onclick="event.stopPropagation();confirmDeleteGroupById('${g.id}')">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+    openBtn.style.display = state.activeGroupId ? '' : 'none';
+  }
+
+  function selectGroup(id) {
+    state.activeGroupId = id;
+    save();
+    renderGroups();
+    document.getElementById('openGroupBtn').style.display = '';
+  }
+
+  function openActiveGroup() {
+    if (!state.activeGroupId) return;
+    document.getElementById('bottomNav').style.display = 'flex';
+    switchView('people');
+  }
+
+  // ═══ GROUP MODAL ═══
+  let editingGroupId = null;
+  let selectedEmoji = '🍔';
+
+  function buildEmojiGrid(current) {
+    selectedEmoji = current || EMOJIS[0];
+    document.getElementById('emojiGrid').innerHTML = EMOJIS.map(e =>
+      `<div class="emoji-opt ${e===selectedEmoji?'selected':''}" onclick="selectEmoji('${e}')">${e}</div>`
+    ).join('');
+  }
+  function selectEmoji(e) {
+    selectedEmoji = e;
+    document.querySelectorAll('.emoji-opt').forEach(el => el.classList.toggle('selected', el.textContent===e));
+  }
+
+  function openNewGroup() {
+    editingGroupId = null;
+    document.getElementById('groupModalTitle').textContent = 'New group';
+    document.getElementById('groupNameInput').value = '';
+    buildEmojiGrid(null);
+    document.getElementById('groupModal').classList.add('open');
+    setTimeout(() => document.getElementById('groupNameInput').focus(), 100);
+  }
+  function openEditGroup(id) {
+    const g = state.groups.find(x => x.id === id);
+    if (!g) return;
+    editingGroupId = id;
+    document.getElementById('groupModalTitle').textContent = 'Edit group';
+    document.getElementById('groupNameInput').value = g.name;
+    buildEmojiGrid(g.emoji);
+    document.getElementById('groupModal').classList.add('open');
+    setTimeout(() => document.getElementById('groupNameInput').focus(), 100);
+  }
+  function closeGroupModal() { document.getElementById('groupModal').classList.remove('open'); editingGroupId = null; }
+  function saveGroupModal() {
+    const name = document.getElementById('groupNameInput').value.trim();
+    if (!name) { alert('Enter a group name.'); return; }
+    if (editingGroupId) {
+      const g = state.groups.find(x => x.id === editingGroupId);
+      if (g) { g.name = name; g.emoji = selectedEmoji; }
+    } else {
+      const id = uid();
+      state.groups.push({ id, name, emoji: selectedEmoji, period: '', people: [], activePersonId: null });
+      state.activeGroupId = id;
+    }
+    closeGroupModal();
+    save();
+    renderGroups();
+    document.getElementById('openGroupBtn').style.display = '';
+  }
+
+  // ═══ PEOPLE VIEW ═══
+  function renderPeople() {
+    const g = activeGroup();
+    if (!g) return;
+    document.getElementById('groupLogoName').textContent = g.name;
+    document.getElementById('periodBadge').textContent = g.period || 'Set period';
+    renderTabs();
+    renderSummary();
+    renderBalance();
+    renderAddArea();
+    renderEntries();
+  }
+
+  function renderTabs() {
+    const g = activeGroup(); if (!g) return;
+    const wrap = document.getElementById('tabsWrap');
+    const addBtn = wrap.querySelector('.add-person-tab');
+    wrap.querySelectorAll('.tab').forEach(t => t.remove());
+    document.getElementById('tabHint').textContent = g.people.length > 0 ? 'Hold a tab to rename or remove' : '';
+    g.people.forEach(p => {
+      const tab = document.createElement('button');
+      tab.className = 'tab' + (p.id === g.activePersonId ? ' active' : '');
+      tab.innerHTML = `<span class="dot"></span>${escHtml(p.name)}`;
+      tab.onclick = () => { g.activePersonId = p.id; closeForm(); save(); renderPeople(); };
+      let timer;
+      const sp = () => { timer = setTimeout(() => openEditPerson(p.id), 600); };
+      const ep = () => clearTimeout(timer);
+      tab.addEventListener('touchstart', sp); tab.addEventListener('touchend', ep); tab.addEventListener('touchmove', ep);
+      tab.addEventListener('mousedown', sp); tab.addEventListener('mouseup', ep);
+      wrap.insertBefore(tab, addBtn);
+    });
+  }
+
+  function renderSummary() {
+    const g = activeGroup(); if (!g) return;
+    const area = document.getElementById('summaryArea');
+    if (g.people.length === 0) { area.innerHTML = ''; return; }
+    if (g.people.length === 1) {
+      const p = g.people[0];
+      area.innerHTML = `<div class="summary-strip"><div class="summary-item"><div class="summary-label">${escHtml(p.name)}</div><div class="summary-val">${fmt(personTotal(p))}</div></div></div>`;
+      return;
+    }
+    const combined = g.people.reduce((s,p) => s+personTotal(p), 0);
+    let items = g.people.map(p => `<div class="summary-item"><div class="summary-label">${escHtml(p.name)}</div><div class="summary-val">${fmt(personTotal(p))}</div></div><div class="summary-divider"></div>`).join('');
+    items += `<div class="summary-item"><div class="summary-label">Combined</div><div class="summary-val">${fmt(combined)}</div></div>`;
+    area.innerHTML = `<div class="summary-strip">${items}</div>`;
+  }
+
+  function calcSettlements() {
+    const g = activeGroup(); if (!g || g.people.length < 2) return [];
+    const ids = g.people.map(p => p.id);
+    const names = {}; g.people.forEach(p => { names[p.id] = p.name; });
+    const net = {}; ids.forEach(a => { net[a]={}; ids.forEach(b => { net[a][b]=0; }); });
+    g.people.forEach(creditor => {
+      (creditor.entries||[]).forEach(e => {
+        const debtorId = e.debtorId || g.people.find(p => p.id !== creditor.id)?.id;
+        if (!debtorId || debtorId === creditor.id) return;
+        net[debtorId][creditor.id] += parseFloat(e.amount);
+      });
+    });
+    const transfers = [];
+    for (let i=0; i<ids.length; i++) for (let j=i+1; j<ids.length; j++) {
+      const a=ids[i], b=ids[j], diff=net[a][b]-net[b][a];
+      if (diff > 0.005) transfers.push({ from:names[a], to:names[b], amount:diff });
+      else if (diff < -0.005) transfers.push({ from:names[b], to:names[a], amount:-diff });
+    }
+    return transfers;
+  }
+
+  function renderBalance() {
+    const card = document.getElementById('balanceCard');
+    const g = activeGroup(); if (!g || g.people.length < 2) { card.innerHTML=''; return; }
+    const transfers = calcSettlements();
+    if (transfers.length === 0) {
+      card.innerHTML = `<div class="balance-card even"><span class="balance-icon">⚖️</span><span class="balance-text"><strong>All even!</strong><br>No one owes anything.</span></div>`;
+      return;
+    }
+    const lines = transfers.map(t => `<strong>${escHtml(t.from)}</strong> needs to send <span style="color:var(--accent2)">${fmt(t.amount)}</span> to <strong>${escHtml(t.to)}</strong>`).join('<br>');
+    card.innerHTML = `<div class="balance-card owes"><span class="balance-icon">💸</span><span class="balance-text">${lines}</span></div>`;
+  }
+
+  function renderAddArea() {
+    const g = activeGroup();
+    const area = document.getElementById('addArea');
+    const settleArea = document.getElementById('settleArea');
+    if (!g || g.people.length === 0) { area.innerHTML=''; settleArea.innerHTML=''; return; }
+    settleArea.innerHTML = `<div class="settle-section"><button class="settle-btn" onclick="openSettle()">⇄ Settle up</button></div>`;
+    const name = activePerson()?.name || '';
+    area.innerHTML = `<div class="add-section"><button class="add-btn" onclick="toggleForm()"><span id="addBtnIcon">+</span> <span id="addBtnText">Add entry for ${escHtml(name)}</span></button></div>`;
+  }
+
+  function renderEntries() {
+    const g = activeGroup();
+    const section = document.getElementById('entriesSection');
+    if (!g || g.people.length === 0) {
+      section.innerHTML = `<div class="no-people"><div style="font-size:40px;margin-bottom:12px">👥</div>Add people to get started.<br>Tap the <strong>+</strong> above.<br><button class="no-people-btn" onclick="openAddPerson()">+ Add first person</button></div>`;
+      return;
+    }
+    const person = activePerson(); if (!person) { section.innerHTML=''; return; }
+    const entries = [...(person.entries||[])].reverse();
+    let html = '';
+    if (entries.length === 0) {
+      html = `<div class="empty-state"><div class="empty-icon">🧾</div>No entries yet for ${escHtml(person.name)}.<br>Tap <strong>+ Add entry</strong> above.</div>`;
+    } else {
+      html += `<div class="running-total"><div class="rt-label">Total — ${escHtml(person.name)}</div><div class="rt-val">${fmt(personTotal(person))}</div></div>`;
+      html += `<div class="entries-header">${entries.length} entr${entries.length===1?'y':'ies'}</div>`;
+      entries.forEach(e => {
+        const debtorName = g.people.length >= 3 && e.debtorId ? (g.people.find(x=>x.id===e.debtorId)?.name||'') : '';
+        const debtLabel = debtorName ? ` · Owed by: ${escHtml(debtorName)}` : '';
+        html += `<div class="entry-item">
+          <div class="entry-left">
+            <div class="entry-desc">${escHtml(e.desc)}</div>
+            <div class="entry-date">${fmtDate(e.date)}${debtLabel}</div>
+          </div>
+          <div class="entry-amount">${fmt(e.amount)}</div>
+          <div class="entry-actions">
+            <button class="entry-edit" onclick="openEditEntry('${person.id}','${e.id}')">✎</button>
+            <button class="entry-delete" onclick="confirmDeleteEntry('${person.id}','${e.id}','${escHtml(e.desc)}')">✕</button>
+          </div>
+        </div>`;
+      });
+    }
+    section.innerHTML = html;
+  }
+
+  // ═══ DEBTOR SELECTOR ═══
+  let selectedDebtorId = null;
+  let editSelectedDebtorId = null;
+
+  function buildDebtorSelector(selectorId, groupId, creditorId, currentDebtorId) {
+    const g = activeGroup(); if (!g) return;
+    const group = document.getElementById(groupId);
+    const sel = document.getElementById(selectorId);
+    const others = g.people.filter(p => p.id !== creditorId);
+    if (g.people.length >= 3) {
+      group.style.display = '';
+      sel.innerHTML = '';
+      if (!currentDebtorId || currentDebtorId === creditorId) currentDebtorId = others[0]?.id;
+      if (selectorId==='payerSelector') selectedDebtorId = currentDebtorId;
+      else editSelectedDebtorId = currentDebtorId;
+      others.forEach(p => {
+        const i = g.people.findIndex(x => x.id === p.id);
+        const c = personColor(i);
+        const btn = document.createElement('button');
+        btn.className = 'payer-btn' + (p.id===currentDebtorId?' selected':'');
+        btn.textContent = p.name; btn.type = 'button';
+        if (p.id===currentDebtorId) btn.style.cssText = `background:${c.color};border-color:${c.color};color:#000`;
+        btn.onclick = () => {
+          sel.querySelectorAll('.payer-btn').forEach(b => { b.classList.remove('selected'); b.style.cssText=''; });
+          btn.classList.add('selected'); btn.style.cssText = `background:${c.color};border-color:${c.color};color:#000`;
+          if (selectorId==='payerSelector') selectedDebtorId = p.id;
+          else editSelectedDebtorId = p.id;
+        };
+        sel.appendChild(btn);
+      });
+    } else {
+      group.style.display = 'none';
+      const other = others[0];
+      if (selectorId==='payerSelector') selectedDebtorId = other?.id||null;
+      else editSelectedDebtorId = other?.id||null;
+    }
+  }
+
+  // ═══ FORM ═══
+  let formOpen = false;
+  function toggleForm() {
+    formOpen = !formOpen;
+    const panel = document.getElementById('formPanel');
+    if (formOpen) {
+      panel.classList.add('open');
+      document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('entryDesc').value = '';
+      document.getElementById('entryAmount').value = '';
+      buildDebtorSelector('payerSelector','payerGroup', activePerson()?.id, null);
+      setTimeout(() => document.getElementById('entryDesc').focus(), 50);
+      const btn = document.querySelector('.add-btn');
+      if (btn) btn.innerHTML = '<span>✕</span> <span>Cancel</span>';
+    } else { closeForm(); }
+  }
+  function closeForm() {
+    formOpen = false;
+    document.getElementById('formPanel').classList.remove('open');
+    document.getElementById('entryDesc').value='';
+    document.getElementById('entryAmount').value='';
+    renderAddArea();
+  }
+  function saveEntry() {
+    const date = document.getElementById('entryDate').value;
+    const desc = document.getElementById('entryDesc').value.trim();
+    const amount = parseFloat(document.getElementById('entryAmount').value);
+    if (!desc) { alert('Please enter a description.'); return; }
+    if (isNaN(amount)||amount<=0) { alert('Please enter a valid amount.'); return; }
+    const g = activeGroup(); if (!g) return;
+    const person = activePerson(); if (!person) return;
+    person.entries = person.entries||[];
+    person.entries.push({ id:uid(), date, desc, amount, debtorId:selectedDebtorId });
+    closeForm(); save(); renderPeople();
+  }
+
+  // ═══ PERSON MODAL ═══
+  let editingPersonId = null;
+  function openAddPerson() {
+    editingPersonId = null;
+    document.getElementById('personModalTitle').textContent = 'Add person';
+    document.getElementById('personNameInput').value = '';
+    document.getElementById('personModalSave').textContent = 'Add';
+    document.getElementById('deletePersonBtn').style.display = 'none';
+    document.getElementById('personModal').classList.add('open');
+    setTimeout(() => document.getElementById('personNameInput').focus(), 100);
+  }
+  function openEditPerson(id) {
+    const g = activeGroup(); if (!g) return;
+    const person = g.people.find(p => p.id===id); if (!person) return;
+    editingPersonId = id;
+    document.getElementById('personModalTitle').textContent = 'Edit person';
+    document.getElementById('personNameInput').value = person.name;
+    document.getElementById('personModalSave').textContent = 'Save';
+    document.getElementById('deletePersonBtn').style.display = '';
+    document.getElementById('personModal').classList.add('open');
+    setTimeout(() => document.getElementById('personNameInput').focus(), 100);
+  }
+  function closePersonModal() { document.getElementById('personModal').classList.remove('open'); editingPersonId=null; }
+  function savePersonModal() {
+    const name = document.getElementById('personNameInput').value.trim();
+    if (!name) { alert('Enter a name.'); return; }
+    const g = activeGroup(); if (!g) return;
+    if (editingPersonId) {
+      const p = g.people.find(x=>x.id===editingPersonId); if (p) p.name=name;
+    } else {
+      const id = uid();
+      g.people.push({ id, name, entries:[] });
+      g.activePersonId = id;
+    }
+    closePersonModal(); save(); renderPeople();
+  }
+  function deleteCurrentEditPerson() {
+    const g = activeGroup(); if (!g||!editingPersonId) return;
+    const person = g.people.find(p=>p.id===editingPersonId); if (!person) return;
+    if (!confirm(`Remove ${person.name} and all their entries?`)) return;
+    g.people = g.people.filter(p=>p.id!==editingPersonId);
+    if (g.activePersonId===editingPersonId) g.activePersonId = g.people[0]?.id||null;
+    closePersonModal(); save(); renderPeople();
+  }
+
+  // ═══ PERIOD ═══
+  function openPeriodModal() {
+    const g = activeGroup(); if (!g) return;
+    document.getElementById('periodInput').value = g.period||'';
+    document.getElementById('periodModal').classList.add('open');
+    setTimeout(() => document.getElementById('periodInput').focus(), 100);
+  }
+  function closePeriodModal() { document.getElementById('periodModal').classList.remove('open'); }
+  function savePeriod() {
+    const g = activeGroup(); if (!g) return;
+    g.period = document.getElementById('periodInput').value.trim();
+    closePeriodModal(); save(); renderPeople();
+  }
+
+  // ═══ EDIT ENTRY ═══
+  let editingEntry = null;
+  function openEditEntry(personId, entryId) {
+    const g = activeGroup(); if (!g) return;
+    const person = g.people.find(p=>p.id===personId); if (!person) return;
+    const entry = person.entries.find(e=>e.id===entryId); if (!entry) return;
+    editingEntry = { personId, entryId };
+    editSelectedDebtorId = entry.debtorId||null;
+    document.getElementById('editEntryDate').value = entry.date||'';
+    document.getElementById('editEntryDesc').value = entry.desc||'';
+    document.getElementById('editEntryAmount').value = entry.amount||'';
+    buildDebtorSelector('editPayerSelector','editPayerGroup', personId, entry.debtorId||null);
+    document.getElementById('editEntryModal').classList.add('open');
+    setTimeout(() => document.getElementById('editEntryDesc').focus(), 100);
+  }
+  function closeEditEntry() { document.getElementById('editEntryModal').classList.remove('open'); editingEntry=null; }
+  function saveEditEntry() {
+    if (!editingEntry) return;
+    const date = document.getElementById('editEntryDate').value;
+    const desc = document.getElementById('editEntryDesc').value.trim();
+    const amount = parseFloat(document.getElementById('editEntryAmount').value);
+    if (!desc) { alert('Enter a description.'); return; }
+    if (isNaN(amount)||amount<=0) { alert('Enter a valid amount.'); return; }
+    const g = activeGroup(); if (!g) return;
+    const person = g.people.find(p=>p.id===editingEntry.personId); if (!person) return;
+    const entry = person.entries.find(e=>e.id===editingEntry.entryId); if (!entry) return;
+    entry.date=date; entry.desc=desc; entry.amount=amount; entry.debtorId=editSelectedDebtorId;
+    closeEditEntry(); save(); renderPeople();
+  }
+
+  // ═══ DELETE ENTRY ═══
+  let pendingDelete = null;
+  function confirmDeleteEntry(personId, entryId, desc) {
+    pendingDelete = { personId, entryId };
+    document.getElementById('deleteConfirmText').innerHTML = `Are you sure you want to remove <strong style="color:var(--text)">${desc}</strong>?`;
+    document.getElementById('deleteConfirmModal').classList.add('open');
+  }
+  function closeDeleteConfirm() { document.getElementById('deleteConfirmModal').classList.remove('open'); pendingDelete=null; }
+  function confirmDeleteExecute() {
+    if (!pendingDelete) return;
+    const g = activeGroup(); if (!g) return;
+    const person = g.people.find(p=>p.id===pendingDelete.personId); if (!person) return;
+    person.entries = person.entries.filter(e=>e.id!==pendingDelete.entryId);
+    closeDeleteConfirm(); save(); renderPeople();
+  }
+
+  // ═══ SETTLE ═══
+  function openSettle() {
+    const g = activeGroup(); if (!g) return;
+    let html = `<strong>Period:</strong> ${escHtml(g.period||'—')}<br><br>`;
+    g.people.forEach(p => { html+=`<strong>${escHtml(p.name)}:</strong> ${fmt(personTotal(p))}<br>`; });
+    const transfers = calcSettlements();
+    html += '<br>';
+    if (transfers.length===0) html += `✅ <strong>All even — nothing to transfer.</strong>`;
+    else transfers.forEach(t => { html+=`💸 <strong>${escHtml(t.from)}</strong> needs to send <strong>${fmt(t.amount)}</strong> to <strong>${escHtml(t.to)}</strong><br>`; });
+    document.getElementById('settleContent').innerHTML = html;
+    document.getElementById('settleModal').classList.add('open');
+  }
+  function closeSettle() { document.getElementById('settleModal').classList.remove('open'); }
+  function markSettled() {
+    if (!confirm('Clear all entries and start fresh?')) return;
+    const g = activeGroup(); if (!g) return;
+    g.people.forEach(p => p.entries=[]);
+    closeSettle(); save(); renderPeople();
+  }
+
+  // ═══ OVERVIEW ═══
+  function renderOverview() {
+    const g = activeGroup();
+    const section = document.getElementById('overviewContent');
+    if (!g||g.people.length===0) { section.innerHTML=`<div class="empty-state"><div class="empty-icon">👥</div>No people in this group.</div>`; return; }
+    const people = g.people;
+    let html = `<div class="ov-section-label">Totals</div><div class="ov-totals-cols">`;
+    people.forEach((p,i) => {
+      const c = personColor(i);
+      if (i>0) html+=`<div class="ov-col-divider"></div>`;
+      html+=`<div class="ov-col"><div class="ov-col-name"><span class="person-pill" style="background:${c.bg};color:${c.color};border:1px solid ${c.border}">${escHtml(p.name)}</span></div><div class="ov-col-val">${fmt(personTotal(p))}</div></div>`;
+    });
+    html+=`</div>`;
+    let allEntries=[]; people.forEach((p,i) => (p.entries||[]).forEach(e => allEntries.push({...e,personName:p.name,personIdx:i})));
+    if (allEntries.length===0) { html+=`<div class="empty-state" style="padding:20px 0"><div class="empty-icon">🧾</div>No entries yet.</div>`; section.innerHTML=html; return; }
+    allEntries.sort((a,b) => { if (!a.date&&!b.date) return 0; if (!a.date) return 1; if (!b.date) return -1; return b.date.localeCompare(a.date); });
+    const dateSet=new Set(); people.forEach(p=>(p.entries||[]).forEach(e=>dateSet.add(e.date||'__')));
+    const allDates=[...dateSet].sort((a,b)=>{ if(a==='__') return 1; if(b==='__') return -1; return b.localeCompare(a); });
+    const lookup={}; people.forEach(p=>{ lookup[p.id]={}; (p.entries||[]).forEach(e=>{ const k=e.date||'__'; if(!lookup[p.id][k]) lookup[p.id][k]=[]; lookup[p.id][k].push(e); }); });
+    const rowsPerDate={}; allDates.forEach(d=>{ let max=0; people.forEach(p=>{ const a=lookup[p.id][d]||[]; if(a.length>max) max=a.length; }); rowsPerDate[d]=max; });
+    const total = allEntries.reduce((s,e)=>s+parseFloat(e.amount),0);
+    let headerCols=`<th>Date</th>`;
+    people.forEach((p,i)=>{ const c=personColor(i); headerCols+=`<th colspan="2" class="th-person" style="--pcol:${c.color};color:${c.color}">${escHtml(p.name)}</th>`; });
+    let footCols=`<td class="ov-tfoot-label">Total</td>`;
+    people.forEach(p=>{ footCols+=`<td></td><td class="ov-tfoot-total">${fmt(personTotal(p))}</td>`; });
+    let rows='';
+    allDates.forEach(d=>{
+      const maxRows=rowsPerDate[d];
+      for(let r=0;r<maxRows;r++){
+        let row='';
+        if(r===0) row+=`<td class="ov-td-date" rowspan="${maxRows}">${d==='__'?'—':fmtDate(d)}</td>`;
+        people.forEach(p=>{
+          const entries=lookup[p.id][d]||[]; const e=entries[r];
+          if(e){
+            const debtorName=g.people.length>=3&&e.debtorId?(g.people.find(x=>x.id===e.debtorId)?.name||''):'';
+            const dh=debtorName?`<div style="font-size:10px;color:var(--muted);margin-top:3px">Owed by: ${escHtml(debtorName)}</div>`:'';
+            row+=`<td class="ov-td-desc">${escHtml(e.desc)}${dh}</td><td class="ov-td-amount">${fmt(e.amount)}</td>`;
+          } else { row+=`<td class="ov-td-empty">—</td><td class="ov-td-empty">—</td>`; }
+        });
+        rows+=`<tr>${row}</tr>`;
+      }
+    });
+    html+=`<div class="ov-section-label">${allEntries.length} entr${allEntries.length===1?'y':'ies'} — all people</div>`;
+    html+=`<div class="ov-table-wrap"><table class="ov-table"><thead><tr>${headerCols}</tr></thead><tbody>${rows}</tbody><tfoot><tr>${footCols}</tr></tfoot></table></div>`;
+    section.innerHTML=html;
+  }
+
+  // ═══ SETTINGS ═══
+  function renderSettings() {
+    const g = activeGroup();
+    const el = document.getElementById('settingsCurrentGroup');
+    if (!g) { el.innerHTML=`<div class="settings-row"><div class="settings-row-left"><div class="settings-row-title">No active group</div><div class="settings-row-desc">Go to Groups and select one.</div></div></div>`; return; }
+    el.innerHTML=`<div class="settings-row"><div class="settings-row-left"><div class="settings-row-title">${g.emoji||'👥'} ${escHtml(g.name)}</div><div class="settings-row-desc">${g.people.length} people · ${g.people.reduce((s,p)=>s+(p.entries||[]).length,0)} entries</div></div></div>`;
+  }
+
+  let pendingConfirmFn = null;
+  function showConfirm(title, text, fn) {
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmText').textContent = text;
+    pendingConfirmFn = fn;
+    document.getElementById('confirmOkBtn').onclick = () => { closeConfirm(); fn(); };
+    document.getElementById('confirmModal').classList.add('open');
+  }
+  function closeConfirm() { document.getElementById('confirmModal').classList.remove('open'); }
+
+  function confirmResetEntries() {
+    const g = activeGroup(); if (!g) return;
+    showConfirm('Reset entries?', `This will clear all entries in "${g.name}". People will stay.`, () => {
+      g.people.forEach(p=>p.entries=[]); save(); renderPeople(); renderSettings();
+    });
+  }
+  function confirmDeleteGroup() {
+    const g = activeGroup(); if (!g) return;
+    confirmDeleteGroupById(g.id);
+  }
+  function confirmDeleteGroupById(id) {
+    const g = state.groups.find(x=>x.id===id); if (!g) return;
+    showConfirm('Delete group?', `"${g.name}" and all its data will be permanently removed.`, () => {
+      state.groups = state.groups.filter(x=>x.id!==id);
+      if (state.activeGroupId===id) {
+        state.activeGroupId = state.groups[0]?.id||null;
+        document.getElementById('bottomNav').style.display = state.activeGroupId ? 'flex' : 'none';
+        if (!state.activeGroupId) switchView('groups');
+      }
+      save(); renderGroups(); renderSettings();
+    });
+  }
+  function confirmResetAll() {
+    showConfirm('Wipe everything?', 'All groups, people, and entries will be permanently deleted.', () => {
+      state = { activeGroupId:null, groups:[] };
+      document.getElementById('bottomNav').style.display='none';
+      save(); switchView('groups');
+    });
+  }
+
+  // ═══ ENTER KEYS & BACKDROP ═══
+  document.getElementById('personNameInput').addEventListener('keydown', e=>{ if(e.key==='Enter') savePersonModal(); });
+  document.getElementById('periodInput').addEventListener('keydown', e=>{ if(e.key==='Enter') savePeriod(); });
+  document.getElementById('entryAmount').addEventListener('keydown', e=>{ if(e.key==='Enter') saveEntry(); });
+  document.getElementById('groupNameInput').addEventListener('keydown', e=>{ if(e.key==='Enter') saveGroupModal(); });
+  document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e=>{ if(e.target===m) m.classList.remove('open'); }));
+
+  // ═══ INIT ═══
+  // Migrate old data if exists
+  const oldState = localStorage.getItem('splitState2');
+  if (oldState && state.groups.length === 0) {
+    try {
+      const old = JSON.parse(oldState);
+      if (old.people && old.people.length > 0) {
+        const id = uid();
+        state.groups.push({ id, name:'My Group', emoji:'👥', period:old.period||'', people:old.people, activePersonId:old.activePersonId||old.people[0]?.id||null });
+        state.activeGroupId = id;
+        save();
+      }
+    } catch(e) {}
+  }
+
+  if (state.activeGroupId) {
+    document.getElementById('bottomNav').style.display = 'flex';
+    switchView('people');
+  } else {
+    renderGroups();
+  }
+</script>
+</body>
+</html>
