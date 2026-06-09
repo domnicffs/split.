@@ -179,6 +179,17 @@
   .settings-btn { padding:8px 16px; border-radius:8px; font-family:'Inter',sans-serif; font-size:13px; font-weight:600; cursor:pointer; border:none; white-space:nowrap; }
   .settings-btn.danger { background:rgba(255,77,77,0.15); color:var(--danger); border:1px solid rgba(255,77,77,0.3); }
   .settings-btn.normal { background:var(--surface2); color:var(--text); border:1px solid var(--border); }
+  .io-btns { display:flex; gap:12px; margin-bottom:24px; }
+  .io-btn {
+    flex:1; background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:18px 12px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:10px; cursor:pointer; transition:all 0.2s; font-family:'Inter',sans-serif;
+  }
+  .io-btn:hover { border-color:var(--accent); background:rgba(200,241,53,0.06); }
+  .io-btn:active { opacity:0.8; }
+  .io-btn svg { width:28px; height:28px; }
+  .io-btn-label { font-size:12px; font-weight:600; color:var(--text); letter-spacing:0.3px; }
+  .io-btn-desc { font-size:10px; color:var(--muted); text-align:center; }
 
   /* MODALS */
   .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; display:none; align-items:flex-end; justify-content:center; }
@@ -388,6 +399,28 @@
     <div class="settings-group-label">Current group</div>
     <div class="settings-card" id="settingsCurrentGroup"></div>
 
+    <div class="settings-group-label">Share data</div>
+    <div class="io-btns">
+      <button class="io-btn" onclick="exportData()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="4" ry="4"/>
+          <polyline points="16 12 12 8 8 12"/>
+          <line x1="12" y1="8" x2="12" y2="16"/>
+        </svg>
+        <div class="io-btn-label">Export</div>
+        <div class="io-btn-desc">Share group data</div>
+      </button>
+      <button class="io-btn" onclick="triggerImport()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="4" ry="4"/>
+          <polyline points="8 12 12 16 16 12"/>
+          <line x1="12" y1="16" x2="12" y2="8"/>
+        </svg>
+        <div class="io-btn-label">Import</div>
+        <div class="io-btn-desc">Load group data</div>
+      </button>
+    </div>
+
     <div class="settings-group-label">Data</div>
     <div class="settings-card">
       <div class="settings-row">
@@ -411,6 +444,32 @@
         </div>
         <button class="settings-btn danger" onclick="confirmResetAll()">Wipe all</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- EXPORT MODAL -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal" style="max-height:85vh;display:flex;flex-direction:column;">
+    <div class="modal-title" style="text-transform:uppercase;letter-spacing:1px;font-size:15px">Export Data</div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:12px">Copy the text below and send it to someone. They can paste it into Import to load your group.</div>
+    <textarea id="exportTextarea" readonly style="flex:1;min-height:200px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;font-family:'Inter',sans-serif;font-size:11px;color:var(--text);resize:none;outline:none;line-height:1.6"></textarea>
+    <div class="modal-actions" style="margin-top:12px">
+      <button class="btn-secondary" onclick="closeExportModal()">Close</button>
+      <button class="btn-primary" onclick="copyExportData()">Copy all</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT MODAL -->
+<div class="modal-overlay" id="importModal">
+  <div class="modal">
+    <div class="modal-title" style="text-transform:uppercase;letter-spacing:1px;font-size:15px">Import Data</div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:12px">Paste exported group data below and tap Import.</div>
+    <textarea id="importTextarea" style="width:100%;min-height:180px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;font-family:'Inter',sans-serif;font-size:11px;color:var(--text);resize:none;outline:none;line-height:1.6" placeholder="Paste data here…"></textarea>
+    <div class="modal-actions" style="margin-top:12px">
+      <button class="btn-secondary" onclick="closeImportModal()">Cancel</button>
+      <button class="btn-primary" onclick="handleImportText()">Import</button>
     </div>
   </div>
 </div>
@@ -908,9 +967,9 @@
     html+=`</div>`;
     let allEntries=[]; people.forEach((p,i) => (p.entries||[]).forEach(e => allEntries.push({...e,personName:p.name,personIdx:i})));
     if (allEntries.length===0) { html+=`<div class="empty-state" style="padding:20px 0"><div class="empty-icon">🧾</div>No entries yet.</div>`; section.innerHTML=html; return; }
-    allEntries.sort((a,b) => { if (!a.date&&!b.date) return 0; if (!a.date) return 1; if (!b.date) return -1; return b.date.localeCompare(a.date); });
+    allEntries.sort((a,b) => { if (!a.date&&!b.date) return 0; if (!a.date) return 1; if (!b.date) return -1; return a.date.localeCompare(b.date); });
     const dateSet=new Set(); people.forEach(p=>(p.entries||[]).forEach(e=>dateSet.add(e.date||'__')));
-    const allDates=[...dateSet].sort((a,b)=>{ if(a==='__') return 1; if(b==='__') return -1; return b.localeCompare(a); });
+    const allDates=[...dateSet].sort((a,b)=>{ if(a==='__') return 1; if(b==='__') return -1; return a.localeCompare(b); });
     const lookup={}; people.forEach(p=>{ lookup[p.id]={}; (p.entries||[]).forEach(e=>{ const k=e.date||'__'; if(!lookup[p.id][k]) lookup[p.id][k]=[]; lookup[p.id][k].push(e); }); });
     const rowsPerDate={}; allDates.forEach(d=>{ let max=0; people.forEach(p=>{ const a=lookup[p.id][d]||[]; if(a.length>max) max=a.length; }); rowsPerDate[d]=max; });
     const total = allEntries.reduce((s,e)=>s+parseFloat(e.amount),0);
@@ -986,6 +1045,81 @@
       document.getElementById('bottomNav').style.display='none';
       save(); switchView('groups');
     });
+  }
+
+  // ═══ EXPORT / IMPORT ═══
+  function exportData() {
+    const g = activeGroup();
+    if (!g) { alert('No active group to export.'); return; }
+    const payload = JSON.stringify(g, null, 2);
+    document.getElementById('exportTextarea').value = payload;
+    document.getElementById('exportModal').classList.add('open');
+  }
+
+  function closeExportModal() {
+    document.getElementById('exportModal').classList.remove('open');
+  }
+
+  function copyExportData() {
+    const ta = document.getElementById('exportTextarea');
+    ta.select();
+    ta.setSelectionRange(0, 99999);
+    try {
+      navigator.clipboard.writeText(ta.value).then(() => {
+        const btn = document.querySelector('#exportModal .btn-primary');
+        const orig = btn.textContent;
+        btn.textContent = 'Copied ✓';
+        setTimeout(() => btn.textContent = orig, 2000);
+      });
+    } catch(e) {
+      document.execCommand('copy');
+      const btn = document.querySelector('#exportModal .btn-primary');
+      const orig = btn.textContent;
+      btn.textContent = 'Copied ✓';
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+  }
+
+  function triggerImport() {
+    document.getElementById('importTextarea').value = '';
+    document.getElementById('importModal').classList.add('open');
+    setTimeout(() => document.getElementById('importTextarea').focus(), 100);
+  }
+
+  function closeImportModal() {
+    document.getElementById('importModal').classList.remove('open');
+  }
+
+  function handleImportText() {
+    const text = document.getElementById('importTextarea').value.trim();
+    if (!text) { alert('Please paste some data first.'); return; }
+    try {
+      const imported = JSON.parse(text);
+      if (!imported.name || !Array.isArray(imported.people)) {
+        alert('Invalid data — does not look like a Split export.'); return;
+      }
+      imported.id = uid();
+      const exists = state.groups.find(g => g.name === imported.name);
+      if (exists) {
+        showConfirm(
+          'Group already exists',
+          `A group named "${imported.name}" already exists. Import as a new copy?`,
+          () => { imported.name = imported.name + ' (imported)'; addImportedGroup(imported); }
+        );
+      } else {
+        addImportedGroup(imported);
+      }
+      closeImportModal();
+    } catch(err) {
+      alert('Could not read data. Make sure you pasted the full export text.');
+    }
+  }
+
+  function addImportedGroup(g) {
+    state.groups.push(g);
+    state.activeGroupId = g.id;
+    save(); renderGroups(); renderSettings();
+    alert(`"${g.name}" imported successfully!`);
   }
 
   // ═══ ENTER KEYS & BACKDROP ═══
