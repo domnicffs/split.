@@ -55,7 +55,7 @@
   .summary-strip { margin:16px 20px 0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; display:flex; justify-content:space-between; align-items:center; }
   .summary-item { text-align:center; flex:1; }
   .summary-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .summary-val { font-family:'Inter',sans-serif; font-weight:700; font-size:20px; margin-top:2px; color:var(--accent); }
+  .summary-val { font-family:'Inter',sans-serif; font-weight:700; font-size:16px; margin-top:2px; color:var(--accent); }
   .summary-divider { width:1px; background:var(--border); height:32px; flex-shrink:0; margin:0 4px; }
 
   /* BALANCE CARD */
@@ -65,10 +65,6 @@
   .balance-card.even { background:var(--surface); border:1px solid var(--border); }
   .balance-icon { font-size:20px; flex-shrink:0; }
   .balance-text { flex:1; line-height:1.8; color:var(--text); }
-
-  /* SETTLE BTN */
-  .settle-section { margin:12px 20px 0; }
-  .settle-btn { width:100%; background:transparent; color:var(--accent2); border:1px solid var(--accent2); border-radius:var(--radius); padding:13px; font-family:'Inter',sans-serif; font-weight:700; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; }
 
   /* ADD SECTION */
   .add-section { margin:16px 20px 0; }
@@ -90,6 +86,15 @@
 
   /* PAYER SELECTOR */
   .payer-selector { display:flex; gap:8px; flex-wrap:wrap; }
+  .split-toggle { display:flex; gap:0; background:var(--surface2); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .split-toggle-btn { flex:1; padding:9px 12px; background:none; border:none; font-family:'Inter',sans-serif; font-size:13px; font-weight:500; color:var(--muted); cursor:pointer; transition:all 0.15s; }
+  .split-toggle-btn.active { background:var(--accent); color:#000; font-weight:700; }
+  .custom-split-rows { display:flex; flex-direction:column; gap:8px; }
+  .custom-split-row { display:flex; align-items:center; gap:10px; }
+  .custom-split-name { font-size:13px; color:var(--text); width:90px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .custom-split-input { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:8px 12px; font-family:'Inter',sans-serif; font-size:14px; color:var(--text); outline:none; transition:border-color 0.2s; }
+  .custom-split-input:focus { border-color:var(--accent); }
+  .split-preview { font-size:11px; color:var(--muted); text-align:center; padding:4px 0; }
   .payer-btn { flex:1; min-width:60px; padding:8px 10px; border-radius:10px; border:1px solid var(--border); background:var(--surface2); font-family:'Inter',sans-serif; font-size:12px; color:var(--muted); cursor:pointer; text-align:center; transition:all 0.15s; white-space:nowrap; }
   .payer-btn.selected { border-color:var(--accent); color:#000; background:var(--accent); font-weight:600; }
 
@@ -188,7 +193,7 @@
   .io-btn:hover { border-color:var(--accent); background:rgba(200,241,53,0.06); }
   .io-btn:active { opacity:0.8; }
   .io-btn svg { width:28px; height:28px; }
-  .io-btn-label { font-size:12px; font-weight:600; color:var(--text); letter-spacing:0.3px; }
+  .io-btn-label { font-size:12px; font-weight:600; color:#a0a0a0; letter-spacing:0.3px; }
   .io-btn-desc { font-size:10px; color:var(--muted); text-align:center; }
 
   /* MODALS */
@@ -300,18 +305,6 @@
   </div>
 </div>
 
-<!-- SETTLE MODAL -->
-<div class="modal-overlay" id="settleModal">
-  <div class="modal">
-    <div class="modal-title">Settlement summary</div>
-    <div id="settleContent" style="font-size:13px;line-height:2;color:var(--text);"></div>
-    <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeSettle()">Close</button>
-      <button class="btn-primary" onclick="markSettled()">Mark as settled ✓</button>
-    </div>
-  </div>
-</div>
-
 <!-- CONFIRM MODAL (generic) -->
 <div class="modal-overlay" id="confirmModal">
   <div class="modal">
@@ -328,12 +321,15 @@
 
 <!-- GROUPS VIEW -->
 <div class="view active" id="viewGroups">
-  <div class="groups-header">
-    <div class="groups-title">split<span>.</span></div>
-    <div class="groups-subtitle">Your groups</div>
+  <div class="groups-header" style="display:flex;align-items:flex-end;justify-content:space-between">
+    <div>
+      <div class="groups-title">split<span>.</span></div>
+      <div class="groups-subtitle">Your groups</div>
+    </div>
+    <button onclick="openNewGroup()" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 14px;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer">+ New</button>
   </div>
   <div class="groups-list" id="groupsList"></div>
-  <button class="new-group-btn" onclick="openNewGroup()">+ New group</button>
+
   <button class="open-group-btn" id="openGroupBtn" style="display:none" onclick="openActiveGroup()">Open →</button>
 </div>
 
@@ -341,7 +337,7 @@
 <div class="view" id="viewPeople">
   <div class="header">
     <div class="header-left">
-      <img src="icon.png" alt="split" class="header-logo-img" onerror="this.style.display='none'" />
+      
       <div class="logo">split<span>.</span></div>
     </div>
     <div class="header-right">
@@ -355,7 +351,6 @@
   <div class="tab-hint" id="tabHint"></div>
   <div id="summaryArea"></div>
   <div class="balance-outer" id="balanceCard"></div>
-  <div id="settleArea"></div>
   <div id="addArea"></div>
   <div class="form-panel" id="formPanel">
     <div class="form-group">
@@ -367,12 +362,17 @@
       <input type="text" class="form-input" id="entryDesc" placeholder="e.g. KFC, Noodles…" />
     </div>
     <div class="form-group">
-      <div class="form-label">Amount (£)</div>
-      <input type="number" class="form-input" id="entryAmount" placeholder="0.00" step="0.01" min="0" inputmode="decimal" />
+      <div class="form-label">Total amount (£)</div>
+      <input type="number" class="form-input" id="entryAmount" placeholder="0.00" step="0.01" min="0" inputmode="decimal" oninput="onAmountInput()" />
     </div>
-    <div class="form-group" id="payerGroup" style="display:none">
-      <div class="form-label">Who owes you this?</div>
-      <div class="payer-selector" id="payerSelector"></div>
+    <div class="form-group" id="splitGroup" style="display:none">
+      <div class="form-label">How to split?</div>
+      <div class="split-toggle">
+        <button class="split-toggle-btn active" id="splitEqualBtn" onclick="setSplitMode('equal')">Split equally</button>
+        <button class="split-toggle-btn" id="splitCustomBtn" onclick="setSplitMode('custom')">Custom</button>
+      </div>
+      <div id="splitPreview" class="split-preview"></div>
+      <div class="custom-split-rows" id="customSplitRows" style="display:none"></div>
     </div>
     <div class="form-actions">
       <button class="btn-cancel" onclick="toggleForm()">Cancel</button>
@@ -402,20 +402,12 @@
     <div class="settings-group-label">Share data</div>
     <div class="io-btns">
       <button class="io-btn" onclick="exportData()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="4" ry="4"/>
-          <polyline points="16 12 12 8 8 12"/>
-          <line x1="12" y1="8" x2="12" y2="16"/>
-        </svg>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a0a0a0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 14V4"/><polyline points="8 8 12 4 16 8"/><path d="M5 19h14"/><path d="M5 15v4h14v-4"/></svg>
         <div class="io-btn-label">Export</div>
         <div class="io-btn-desc">Share group data</div>
       </button>
       <button class="io-btn" onclick="triggerImport()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="4" ry="4"/>
-          <polyline points="8 12 12 16 16 12"/>
-          <line x1="12" y1="16" x2="12" y2="8"/>
-        </svg>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a0a0a0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v10"/><polyline points="8 9 12 13 16 9"/><path d="M5 19h14"/><path d="M5 15v4h14v-4"/></svg>
         <div class="io-btn-label">Import</div>
         <div class="io-btn-desc">Load group data</div>
       </button>
@@ -540,7 +532,17 @@
     const list = document.getElementById('groupsList');
     const openBtn = document.getElementById('openGroupBtn');
     if (state.groups.length === 0) {
-      list.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div>No groups yet.<br>Create one to get started.</div>`;
+      list.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">👥</div>
+        <div style="margin-bottom:24px;font-size:13px;color:var(--muted)">No groups yet.</div>
+        <div style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:280px;margin:0 auto">
+          <button onclick="openNewGroup()" style="background:var(--accent);color:#000;border:none;border-radius:var(--radius);padding:14px;font-family:'Inter',sans-serif;font-weight:700;font-size:15px;cursor:pointer;width:100%">+ Create new group</button>
+          <button onclick="triggerImport()" style="background:transparent;color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:14px;font-family:'Inter',sans-serif;font-weight:600;font-size:15px;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:10px">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a0a0a0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v10"/><polyline points="8 9 12 13 16 9"/><path d="M5 19h14"/><path d="M5 15v4h14v-4"/></svg>
+            Import data
+          </button>
+        </div>
+      </div>`;
       openBtn.style.display = 'none';
       return;
     }
@@ -712,9 +714,7 @@
   function renderAddArea() {
     const g = activeGroup();
     const area = document.getElementById('addArea');
-    const settleArea = document.getElementById('settleArea');
-    if (!g || g.people.length === 0) { area.innerHTML=''; settleArea.innerHTML=''; return; }
-    settleArea.innerHTML = `<div class="settle-section"><button class="settle-btn" onclick="openSettle()">⇄ Settle up</button></div>`;
+    if (!g || g.people.length === 0) { area.innerHTML=''; return; }
     const name = activePerson()?.name || '';
     area.innerHTML = `<div class="add-section"><button class="add-btn" onclick="toggleForm()"><span id="addBtnIcon">+</span> <span id="addBtnText">Add entry for ${escHtml(name)}</span></button></div>`;
   }
@@ -793,6 +793,8 @@
 
   // ═══ FORM ═══
   let formOpen = false;
+  let splitMode = 'equal';
+
   function toggleForm() {
     formOpen = !formOpen;
     const panel = document.getElementById('formPanel');
@@ -801,12 +803,21 @@
       document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
       document.getElementById('entryDesc').value = '';
       document.getElementById('entryAmount').value = '';
-      buildDebtorSelector('payerSelector','payerGroup', activePerson()?.id, null);
+      splitMode = 'equal';
+      document.getElementById('splitEqualBtn').classList.add('active');
+      document.getElementById('splitCustomBtn').classList.remove('active');
+      document.getElementById('customSplitRows').style.display = 'none';
+      document.getElementById('splitPreview').textContent = '';
+      // Show split group only if 2+ people
+      const g = activeGroup();
+      const splitGroup = document.getElementById('splitGroup');
+      splitGroup.style.display = g && g.people.length >= 2 ? '' : 'none';
       setTimeout(() => document.getElementById('entryDesc').focus(), 50);
       const btn = document.querySelector('.add-btn');
       if (btn) btn.innerHTML = '<span>✕</span> <span>Cancel</span>';
     } else { closeForm(); }
   }
+
   function closeForm() {
     formOpen = false;
     document.getElementById('formPanel').classList.remove('open');
@@ -814,16 +825,159 @@
     document.getElementById('entryAmount').value='';
     renderAddArea();
   }
+
+  function setSplitMode(mode) {
+    splitMode = mode;
+    document.getElementById('splitEqualBtn').classList.toggle('active', mode === 'equal');
+    document.getElementById('splitCustomBtn').classList.toggle('active', mode === 'custom');
+    onAmountInput();
+  }
+
+  // Track which custom fields have been manually edited
+  const customEdited = new Set();
+
+  function buildCustomRows() {
+    const g = activeGroup(); if (!g) return;
+    const amount = parseFloat(document.getElementById('entryAmount').value);
+    const creditor = activePerson(); if (!creditor) return;
+    // All people: creditor first, then others
+    const allPeople = [creditor, ...g.people.filter(p => p.id !== creditor.id)];
+    const rows = document.getElementById('customSplitRows');
+    rows.style.display = '';
+    customEdited.clear();
+
+    const defaultShare = (!isNaN(amount) && amount > 0) ? (amount / allPeople.length).toFixed(2) : '';
+
+    rows.innerHTML = allPeople.map((p, i) => {
+      const isCreditor = p.id === creditor.id;
+      return `<div class="custom-split-row">
+        <div class="custom-split-name" style="${isCreditor ? 'color:var(--accent);font-weight:600' : ''}">${escHtml(p.name)}</div>
+        <input type="number" class="custom-split-input" id="custom_${p.id}"
+          placeholder="0.00" step="0.01" min="0" inputmode="decimal"
+          value="${defaultShare}"
+          ${isCreditor ? 'style="border-color:var(--accent)"' : ''}
+          oninput="onCustomInput('${p.id}')" />
+      </div>`;
+    }).join('');
+  }
+
+  function onCustomInput(editedId) {
+    customEdited.add(editedId);
+    const g = activeGroup(); if (!g) return;
+    const creditor = activePerson(); if (!creditor) return;
+    const totalAmount = parseFloat(document.getElementById('entryAmount').value);
+    if (isNaN(totalAmount) || totalAmount <= 0) return;
+
+    const allPeople = [creditor, ...g.people.filter(p => p.id !== creditor.id)];
+    // Sum all manually edited fields (including creditor's readonly share)
+    const editedSum = allPeople
+      .filter(p => p.id === creditor.id || customEdited.has(p.id))
+      .reduce((s, p) => {
+        const val = parseFloat(document.getElementById(`custom_${p.id}`)?.value || '0');
+        return s + (isNaN(val) ? 0 : val);
+      }, 0);
+
+    const unedited = allPeople.filter(p => p.id !== creditor.id && !customEdited.has(p.id));
+    const remainder = Math.max(0, totalAmount - editedSum);
+
+    if (unedited.length === 1) {
+      // Last unedited gets the remainder
+      const inp = document.getElementById(`custom_${unedited[0].id}`);
+      if (inp) inp.value = remainder.toFixed(2);
+    } else if (unedited.length > 1) {
+      // Split remainder equally among unedited
+      const share = remainder / unedited.length;
+      unedited.forEach(p => {
+        const inp = document.getElementById(`custom_${p.id}`);
+        if (inp) inp.value = share.toFixed(2);
+      });
+    }
+
+    // Show remaining indicator
+    const allSum = allPeople.reduce((s, p) => {
+      const val = parseFloat(document.getElementById(`custom_${p.id}`)?.value || '0');
+      return s + (isNaN(val) ? 0 : val);
+    }, 0);
+    const diff = totalAmount - allSum;
+    const preview = document.getElementById('splitPreview');
+    if (Math.abs(diff) < 0.01) {
+      preview.textContent = '✓ Adds up correctly';
+      preview.style.color = 'var(--accent)';
+    } else {
+      preview.textContent = `£${Math.abs(diff).toFixed(2)} ${diff > 0 ? 'unallocated' : 'over by'}`;
+      preview.style.color = 'var(--accent2)';
+    }
+  }
+
+  function onAmountInput() {
+    const g = activeGroup(); if (!g) return;
+    const amount = parseFloat(document.getElementById('entryAmount').value);
+    const creditor = activePerson(); if (!creditor) return;
+    const others = g.people.filter(p => p.id !== creditor.id);
+    const splitGroup = document.getElementById('splitGroup');
+    splitGroup.style.display = g.people.length >= 2 ? '' : 'none';
+
+    if (splitMode === 'equal') {
+      document.getElementById('customSplitRows').style.display = 'none';
+      if (!isNaN(amount) && amount > 0 && others.length > 0) {
+        const share = amount / g.people.length;
+        const preview = document.getElementById('splitPreview');
+        preview.textContent = `£${share.toFixed(2)} each — your £${share.toFixed(2)} share already covered`;
+        preview.style.color = 'var(--muted)';
+      } else {
+        document.getElementById('splitPreview').textContent = '';
+      }
+    } else {
+      document.getElementById('splitPreview').textContent = '';
+      // Rebuild rows when total changes
+      buildCustomRows();
+      // Update creditor readonly field
+      if (!isNaN(amount) && amount > 0) {
+        const allPeople = [creditor, ...others];
+        const share = (amount / allPeople.length).toFixed(2);
+        const inp = document.getElementById(`custom_${creditor.id}`);
+        if (inp) inp.value = share;
+        onCustomInput(creditor.id);
+      }
+    }
+  }
+
+  function setSplitMode(mode) {
+    splitMode = mode;
+    document.getElementById('splitEqualBtn').classList.toggle('active', mode === 'equal');
+    document.getElementById('splitCustomBtn').classList.toggle('active', mode === 'custom');
+    if (mode === 'custom') buildCustomRows();
+    onAmountInput();
+  }
+
   function saveEntry() {
     const date = document.getElementById('entryDate').value;
     const desc = document.getElementById('entryDesc').value.trim();
-    const amount = parseFloat(document.getElementById('entryAmount').value);
+    const totalAmount = parseFloat(document.getElementById('entryAmount').value);
     if (!desc) { alert('Please enter a description.'); return; }
-    if (isNaN(amount)||amount<=0) { alert('Please enter a valid amount.'); return; }
+    if (isNaN(totalAmount) || totalAmount <= 0) { alert('Please enter a valid amount.'); return; }
     const g = activeGroup(); if (!g) return;
-    const person = activePerson(); if (!person) return;
-    person.entries = person.entries||[];
-    person.entries.push({ id:uid(), date, desc, amount, debtorId:selectedDebtorId });
+    const creditor = activePerson(); if (!creditor) return;
+    const others = g.people.filter(p => p.id !== creditor.id);
+    creditor.entries = creditor.entries || [];
+
+    if (g.people.length < 2) {
+      creditor.entries.push({ id:uid(), date, desc, amount:totalAmount, debtorId:null });
+    } else if (splitMode === 'equal') {
+      const share = totalAmount / g.people.length;
+      others.forEach(other => {
+        creditor.entries.push({ id:uid(), date, desc, amount:parseFloat(share.toFixed(2)), debtorId:other.id });
+      });
+    } else {
+      // Custom — save each other person's amount (skip creditor — that's their own share)
+      others.forEach(other => {
+        const val = parseFloat(document.getElementById(`custom_${other.id}`)?.value || '0');
+        if (!isNaN(val) && val > 0) {
+          creditor.entries.push({ id:uid(), date, desc, amount:val, debtorId:other.id });
+        }
+      });
+    }
+
     closeForm(); save(); renderPeople();
   }
 
@@ -932,25 +1086,7 @@
     closeDeleteConfirm(); save(); renderPeople();
   }
 
-  // ═══ SETTLE ═══
-  function openSettle() {
-    const g = activeGroup(); if (!g) return;
-    let html = `<strong>Period:</strong> ${escHtml(g.period||'—')}<br><br>`;
-    g.people.forEach(p => { html+=`<strong>${escHtml(p.name)}:</strong> ${fmt(personTotal(p))}<br>`; });
-    const transfers = calcSettlements();
-    html += '<br>';
-    if (transfers.length===0) html += `✅ <strong>All even — nothing to transfer.</strong>`;
-    else transfers.forEach(t => { html+=`💸 <strong>${escHtml(t.from)}</strong> needs to send <strong>${fmt(t.amount)}</strong> to <strong>${escHtml(t.to)}</strong><br>`; });
-    document.getElementById('settleContent').innerHTML = html;
-    document.getElementById('settleModal').classList.add('open');
-  }
-  function closeSettle() { document.getElementById('settleModal').classList.remove('open'); }
-  function markSettled() {
-    if (!confirm('Clear all entries and start fresh?')) return;
-    const g = activeGroup(); if (!g) return;
-    g.people.forEach(p => p.entries=[]);
-    closeSettle(); save(); renderPeople();
-  }
+
 
   // ═══ OVERVIEW ═══
   function renderOverview() {
