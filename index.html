@@ -86,6 +86,13 @@
 
   /* PAYER SELECTOR */
   .payer-selector { display:flex; gap:8px; flex-wrap:wrap; }
+  .person-toggle-wrap { display:flex; gap:6px; flex-wrap:wrap; }
+  .person-toggle-btn {
+    padding:7px 14px; border-radius:20px; border:1px solid var(--border);
+    background:var(--surface2); font-family:'Inter',sans-serif; font-size:12px;
+    font-weight:500; color:var(--muted); cursor:pointer; transition:all 0.15s;
+  }
+  .person-toggle-btn.selected { color:#000; font-weight:600; }
   .split-toggle { display:flex; gap:0; background:var(--surface2); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
   .split-toggle-btn { flex:1; padding:9px 12px; background:none; border:none; font-family:'Inter',sans-serif; font-size:13px; font-weight:500; color:var(--muted); cursor:pointer; transition:all 0.15s; }
   .split-toggle-btn.active { background:var(--accent); color:#000; font-weight:700; }
@@ -268,7 +275,7 @@
 
 <!-- EDIT ENTRY MODAL -->
 <div class="modal-overlay" id="editEntryModal">
-  <div class="modal">
+  <div class="modal" style="max-height:90vh;overflow-y:auto">
     <div class="modal-title">Edit entry</div>
     <div class="form-group" style="margin-bottom:12px">
       <div class="form-label">Date</div>
@@ -279,8 +286,13 @@
       <input type="text" class="form-input" id="editEntryDesc" />
     </div>
     <div class="form-group" style="margin-bottom:12px">
-      <div class="form-label">Amount (£)</div>
-      <input type="number" class="form-input" id="editEntryAmount" step="0.01" min="0" inputmode="decimal" />
+      <div class="form-label">Total amount (£)</div>
+      <input type="number" class="form-input" id="editEntryAmount" step="0.01" min="0" inputmode="decimal" oninput="onEditAmountInput()" />
+    </div>
+    <div class="form-group" id="editSplitGroup" style="display:none;margin-bottom:12px">
+      <div class="form-label">Amounts per person</div>
+      <div class="custom-split-rows" id="editCustomSplitRows"></div>
+      <div id="editSplitPreview" class="split-preview" style="margin-top:6px"></div>
     </div>
     <div class="form-group" id="editPayerGroup" style="display:none">
       <div class="form-label">Who owes you this?</div>
@@ -365,6 +377,10 @@
       <div class="form-label">Total amount (£)</div>
       <input type="number" class="form-input" id="entryAmount" placeholder="0.00" step="0.01" min="0" inputmode="decimal" oninput="onAmountInput()" />
     </div>
+    <div class="form-group" id="oweGroup" style="display:none">
+      <div class="form-label">Who owes you this?</div>
+      <div class="person-toggle-wrap" id="oweSelector"></div>
+    </div>
     <div class="form-group" id="splitGroup" style="display:none">
       <div class="form-label">How to split?</div>
       <div class="split-toggle">
@@ -427,7 +443,7 @@
           <div class="settings-row-title">Delete group</div>
           <div class="settings-row-desc">Permanently remove this group and all its data.</div>
         </div>
-        <button class="settings-btn danger" onclick="confirmDeleteGroup()">Delete</button>
+        <button class="settings-btn danger" onclick="confirmDeleteCurrentGroup()">Delete</button>
       </div>
       <div class="settings-row">
         <div class="settings-row-left">
@@ -506,7 +522,7 @@
   function activeGroup() { return state.groups.find(g => g.id === state.activeGroupId) || null; }
   function activePerson() { const g = activeGroup(); if (!g) return null; return g.people.find(p => p.id === g.activePersonId) || g.people[0] || null; }
   function fmt(n) { return '£' + parseFloat(n||0).toFixed(2); }
-  function personTotal(p) { return (p.entries||[]).reduce((s,e) => s+parseFloat(e.amount),0); }
+  function personTotal(p) { return (p.entries||[]).filter(e=>!e.ownShare).reduce((s,e) => s+parseFloat(e.amount),0); }
   function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function fmtDate(d) { if (!d) return ''; return new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}); }
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
@@ -549,7 +565,7 @@
     list.innerHTML = state.groups.map(g => {
       const isActive = g.id === state.activeGroupId;
       const totalPeople = g.people.length;
-      const totalEntries = g.people.reduce((s,p) => s+(p.entries||[]).length, 0);
+      const totalEntries = g.people.reduce((s,p) => s+(p.entries||[]).filter(e=>!e.ownShare).length, 0);
       return `<div class="group-card ${isActive?'active-group':''}" onclick="selectGroup('${g.id}')">
         <div class="group-icon">${g.emoji||'👥'}</div>
         <div class="group-info">
@@ -558,7 +574,7 @@
         </div>
         ${isActive ? '<span class="group-active-badge">Active</span>' : ''}
         <div class="group-actions">
-          <button class="group-edit-btn" onclick="event.stopPropagation();openEditGroup('${g.id}')">✎</button>
+          <button class="group-edit-btn" onclick="event.stopPropagation();openEditGroupModal('${g.id}')">✎</button>
           <button class="group-del-btn" onclick="event.stopPropagation();confirmDeleteGroupById('${g.id}')">✕</button>
         </div>
       </div>`;
@@ -602,7 +618,7 @@
     document.getElementById('groupModal').classList.add('open');
     setTimeout(() => document.getElementById('groupNameInput').focus(), 100);
   }
-  function openEditGroup(id) {
+  function openEditGroupModal(id) {
     const g = state.groups.find(x => x.id === id);
     if (!g) return;
     editingGroupId = id;
@@ -672,7 +688,7 @@
       area.innerHTML = `<div class="summary-strip"><div class="summary-item"><div class="summary-label">${escHtml(p.name)}</div><div class="summary-val">${fmt(personTotal(p))}</div></div></div>`;
       return;
     }
-    const combined = g.people.reduce((s,p) => s+personTotal(p), 0);
+    const combined = g.people.reduce((s,p) => s+(p.entries||[]).reduce((x,e)=>x+parseFloat(e.amount),0), 0);
     let items = g.people.map(p => `<div class="summary-item"><div class="summary-label">${escHtml(p.name)}</div><div class="summary-val">${fmt(personTotal(p))}</div></div><div class="summary-divider"></div>`).join('');
     items += `<div class="summary-item"><div class="summary-label">Combined</div><div class="summary-val">${fmt(combined)}</div></div>`;
     area.innerHTML = `<div class="summary-strip">${items}</div>`;
@@ -685,8 +701,9 @@
     const net = {}; ids.forEach(a => { net[a]={}; ids.forEach(b => { net[a][b]=0; }); });
     g.people.forEach(creditor => {
       (creditor.entries||[]).forEach(e => {
-        const debtorId = e.debtorId || g.people.find(p => p.id !== creditor.id)?.id;
-        if (!debtorId || debtorId === creditor.id) return;
+        if (e.ownShare || !e.debtorId) return;
+        const debtorId = e.debtorId;
+        if (debtorId === creditor.id) return;
         net[debtorId][creditor.id] += parseFloat(e.amount);
       });
     });
@@ -727,27 +744,73 @@
       return;
     }
     const person = activePerson(); if (!person) { section.innerHTML=''; return; }
-    const entries = [...(person.entries||[])].reverse();
+    const allEntries = [...(person.entries||[])].filter(e => !e.ownShare);
+
     let html = '';
-    if (entries.length === 0) {
+    if (allEntries.length === 0) {
       html = `<div class="empty-state"><div class="empty-icon">🧾</div>No entries yet for ${escHtml(person.name)}.<br>Tap <strong>+ Add entry</strong> above.</div>`;
     } else {
       html += `<div class="running-total"><div class="rt-label">Total — ${escHtml(person.name)}</div><div class="rt-val">${fmt(personTotal(person))}</div></div>`;
-      html += `<div class="entries-header">${entries.length} entr${entries.length===1?'y':'ies'}</div>`;
-      entries.forEach(e => {
-        const debtorName = g.people.length >= 3 && e.debtorId ? (g.people.find(x=>x.id===e.debtorId)?.name||'') : '';
-        const debtLabel = debtorName ? ` · Owed by: ${escHtml(debtorName)}` : '';
-        html += `<div class="entry-item">
-          <div class="entry-left">
-            <div class="entry-desc">${escHtml(e.desc)}</div>
-            <div class="entry-date">${fmtDate(e.date)}${debtLabel}</div>
-          </div>
-          <div class="entry-amount">${fmt(e.amount)}</div>
-          <div class="entry-actions">
-            <button class="entry-edit" onclick="openEditEntry('${person.id}','${e.id}')">✎</button>
-            <button class="entry-delete" onclick="confirmDeleteEntry('${person.id}','${e.id}','${escHtml(e.desc)}')">✕</button>
-          </div>
-        </div>`;
+
+      // Group by groupId if present, else each entry is its own group
+      const groups = {};
+      const groupOrder = [];
+      [...allEntries].reverse().forEach(e => {
+        const key = e.groupId || e.id; // each ungrouped entry gets its own key
+        if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
+        groups[key].push(e);
+      });
+
+      html += `<div class="entries-header">${groupOrder.length} entr${groupOrder.length===1?'y':'ies'}</div>`;
+
+      groupOrder.forEach(key => {
+        const grp = groups[key];
+        const first = grp[0];
+        const groupTotal = grp.reduce((s,e) => s+parseFloat(e.amount), 0);
+        const ids = grp.map(e => e.id).join(',');
+
+        if (grp.length === 1 || g.people.length < 3) {
+          // Single entry or 2-person group — use only that entry's own ID
+          const e = grp[0];
+          const singleId = e.id;
+          const debtorName = g.people.length >= 3 && e.debtorId ? (g.people.find(x=>x.id===e.debtorId)?.name||'') : '';
+          const debtLabel = debtorName ? ` · Owed by: ${escHtml(debtorName)}` : '';
+          html += `<div class="entry-item">
+            <div class="entry-left">
+              <div class="entry-desc">${escHtml(e.desc)}</div>
+              <div class="entry-date">${fmtDate(e.date)}${debtLabel}</div>
+            </div>
+            <div class="entry-amount">${fmt(e.amount)}</div>
+            <div class="entry-actions">
+              <button class="entry-edit" onclick="openEditGroup('${person.id}','${singleId}')">✎</button>
+              <button class="entry-delete" onclick="confirmDeleteGroup('${person.id}','${singleId}','${escHtml(e.desc)}')">✕</button>
+            </div>
+          </div>`;
+        } else {
+          // Grouped — one card with sub-rows per debtor
+          const subRows = grp.map(e => {
+            const debtorName = e.debtorId ? (g.people.find(x=>x.id===e.debtorId)?.name||'') : '';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-top:1px solid var(--border)">
+              <div style="font-size:11px;color:var(--muted)">${escHtml(debtorName)}</div>
+              <div style="font-size:13px;font-weight:600;color:var(--accent2)">${fmt(e.amount)}</div>
+            </div>`;
+          }).join('');
+
+          html += `<div class="entry-item" style="flex-direction:column;align-items:stretch;gap:6px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="entry-left">
+                <div class="entry-desc">${escHtml(first.desc)}</div>
+                <div class="entry-date">${fmtDate(first.date)}</div>
+              </div>
+              <div class="entry-amount">${fmt(groupTotal)}</div>
+              <div class="entry-actions">
+                <button class="entry-edit" onclick="openEditGroup('${person.id}','${ids}')">✎</button>
+                <button class="entry-delete" onclick="confirmDeleteGroup('${person.id}','${ids}','${escHtml(first.desc)}')">✕</button>
+              </div>
+            </div>
+            ${subRows}
+          </div>`;
+        }
       });
     }
     section.innerHTML = html;
@@ -794,6 +857,38 @@
   // ═══ FORM ═══
   let formOpen = false;
   let splitMode = 'equal';
+  let selectedOwers = new Set(); // IDs of people who owe you
+
+  function buildOweSelector(creditorId) {
+    const g = activeGroup(); if (!g) return;
+    const others = g.people.filter(p => p.id !== creditorId);
+    const wrap = document.getElementById('oweSelector');
+    // Default: all selected
+    selectedOwers = new Set(others.map(p => p.id));
+    wrap.innerHTML = others.map((p, i) => {
+      const c = personColor(g.people.findIndex(x => x.id === p.id));
+      return `<button class="person-toggle-btn selected" id="ower_${p.id}"
+        style="background:${c.color};border-color:${c.color};color:#000"
+        onclick="toggleOwer('${p.id}','${creditorId}')">${escHtml(p.name)}</button>`;
+    }).join('');
+  }
+
+  function toggleOwer(personId, creditorId) {
+    const g = activeGroup(); if (!g) return;
+    const idx = g.people.findIndex(x => x.id === personId);
+    const c = personColor(idx);
+    const btn = document.getElementById(`ower_${personId}`);
+    if (selectedOwers.has(personId)) {
+      selectedOwers.delete(personId);
+      btn.classList.remove('selected');
+      btn.style.cssText = '';
+    } else {
+      selectedOwers.add(personId);
+      btn.classList.add('selected');
+      btn.style.cssText = `background:${c.color};border-color:${c.color};color:#000`;
+    }
+    onAmountInput();
+  }
 
   function toggleForm() {
     formOpen = !formOpen;
@@ -808,10 +903,19 @@
       document.getElementById('splitCustomBtn').classList.remove('active');
       document.getElementById('customSplitRows').style.display = 'none';
       document.getElementById('splitPreview').textContent = '';
-      // Show split group only if 2+ people
       const g = activeGroup();
+      const creditorId = activePerson()?.id;
+      // Show owe selector if 2+ people
+      const oweGroup = document.getElementById('oweGroup');
       const splitGroup = document.getElementById('splitGroup');
-      splitGroup.style.display = g && g.people.length >= 2 ? '' : 'none';
+      if (g && g.people.length >= 2) {
+        oweGroup.style.display = '';
+        splitGroup.style.display = '';
+        buildOweSelector(creditorId);
+      } else {
+        oweGroup.style.display = 'none';
+        splitGroup.style.display = 'none';
+      }
       setTimeout(() => document.getElementById('entryDesc').focus(), 50);
       const btn = document.querySelector('.add-btn');
       if (btn) btn.innerHTML = '<span>✕</span> <span>Cancel</span>';
@@ -826,13 +930,6 @@
     renderAddArea();
   }
 
-  function setSplitMode(mode) {
-    splitMode = mode;
-    document.getElementById('splitEqualBtn').classList.toggle('active', mode === 'equal');
-    document.getElementById('splitCustomBtn').classList.toggle('active', mode === 'custom');
-    onAmountInput();
-  }
-
   // Track which custom fields have been manually edited
   const customEdited = new Set();
 
@@ -840,15 +937,16 @@
     const g = activeGroup(); if (!g) return;
     const amount = parseFloat(document.getElementById('entryAmount').value);
     const creditor = activePerson(); if (!creditor) return;
-    // All people: creditor first, then others
-    const allPeople = [creditor, ...g.people.filter(p => p.id !== creditor.id)];
+    // Creditor first, then only selected owers
+    const owingPeople = g.people.filter(p => selectedOwers.has(p.id));
+    const allPeople = [creditor, ...owingPeople];
     const rows = document.getElementById('customSplitRows');
     rows.style.display = '';
     customEdited.clear();
 
     const defaultShare = (!isNaN(amount) && amount > 0) ? (amount / allPeople.length).toFixed(2) : '';
 
-    rows.innerHTML = allPeople.map((p, i) => {
+    rows.innerHTML = allPeople.map((p) => {
       const isCreditor = p.id === creditor.id;
       return `<div class="custom-split-row">
         <div class="custom-split-name" style="${isCreditor ? 'color:var(--accent);font-weight:600' : ''}">${escHtml(p.name)}</div>
@@ -868,10 +966,12 @@
     const totalAmount = parseFloat(document.getElementById('entryAmount').value);
     if (isNaN(totalAmount) || totalAmount <= 0) return;
 
-    const allPeople = [creditor, ...g.people.filter(p => p.id !== creditor.id)];
-    // Sum all manually edited fields (including creditor's readonly share)
+    // Only operate on creditor + selected owers
+    const owingPeople = g.people.filter(p => selectedOwers.has(p.id));
+    const allPeople = [creditor, ...owingPeople];
+
     const editedSum = allPeople
-      .filter(p => p.id === creditor.id || customEdited.has(p.id))
+      .filter(p => customEdited.has(p.id) || p.id === creditor.id)
       .reduce((s, p) => {
         const val = parseFloat(document.getElementById(`custom_${p.id}`)?.value || '0');
         return s + (isNaN(val) ? 0 : val);
@@ -881,11 +981,9 @@
     const remainder = Math.max(0, totalAmount - editedSum);
 
     if (unedited.length === 1) {
-      // Last unedited gets the remainder
       const inp = document.getElementById(`custom_${unedited[0].id}`);
       if (inp) inp.value = remainder.toFixed(2);
     } else if (unedited.length > 1) {
-      // Split remainder equally among unedited
       const share = remainder / unedited.length;
       unedited.forEach(p => {
         const inp = document.getElementById(`custom_${p.id}`);
@@ -893,7 +991,6 @@
       });
     }
 
-    // Show remaining indicator
     const allSum = allPeople.reduce((s, p) => {
       const val = parseFloat(document.getElementById(`custom_${p.id}`)?.value || '0');
       return s + (isNaN(val) ? 0 : val);
@@ -913,31 +1010,29 @@
     const g = activeGroup(); if (!g) return;
     const amount = parseFloat(document.getElementById('entryAmount').value);
     const creditor = activePerson(); if (!creditor) return;
-    const others = g.people.filter(p => p.id !== creditor.id);
-    const splitGroup = document.getElementById('splitGroup');
-    splitGroup.style.display = g.people.length >= 2 ? '' : 'none';
+    const owingPeople = g.people.filter(p => selectedOwers.has(p.id));
+    const totalPeople = owingPeople.length + 1; // +1 for creditor's own share
 
     if (splitMode === 'equal') {
       document.getElementById('customSplitRows').style.display = 'none';
-      if (!isNaN(amount) && amount > 0 && others.length > 0) {
-        const share = amount / g.people.length;
+      if (!isNaN(amount) && amount > 0 && owingPeople.length > 0) {
+        const share = amount / totalPeople;
         const preview = document.getElementById('splitPreview');
-        preview.textContent = `£${share.toFixed(2)} each — your £${share.toFixed(2)} share already covered`;
+        preview.textContent = `£${share.toFixed(2)} each — your share already covered`;
         preview.style.color = 'var(--muted)';
+      } else if (owingPeople.length === 0) {
+        document.getElementById('splitPreview').textContent = 'Select at least one person';
+        document.getElementById('splitPreview').style.color = 'var(--accent2)';
       } else {
         document.getElementById('splitPreview').textContent = '';
       }
     } else {
       document.getElementById('splitPreview').textContent = '';
-      // Rebuild rows when total changes
       buildCustomRows();
-      // Update creditor readonly field
       if (!isNaN(amount) && amount > 0) {
-        const allPeople = [creditor, ...others];
-        const share = (amount / allPeople.length).toFixed(2);
+        const share = (amount / totalPeople).toFixed(2);
         const inp = document.getElementById(`custom_${creditor.id}`);
-        if (inp) inp.value = share;
-        onCustomInput(creditor.id);
+        if (inp) { inp.value = share; onCustomInput(creditor.id); }
       }
     }
   }
@@ -946,8 +1041,7 @@
     splitMode = mode;
     document.getElementById('splitEqualBtn').classList.toggle('active', mode === 'equal');
     document.getElementById('splitCustomBtn').classList.toggle('active', mode === 'custom');
-    if (mode === 'custom') buildCustomRows();
-    onAmountInput();
+    onAmountInput(); // onAmountInput handles buildCustomRows for custom mode
   }
 
   function saveEntry() {
@@ -962,18 +1056,33 @@
     creditor.entries = creditor.entries || [];
 
     if (g.people.length < 2) {
-      creditor.entries.push({ id:uid(), date, desc, amount:totalAmount, debtorId:null });
+      // Solo entry — full amount is their own spend
+      creditor.entries.push({ id:uid(), date, desc, amount:totalAmount, debtorId:null, ownShare:true });
     } else if (splitMode === 'equal') {
-      const share = totalAmount / g.people.length;
-      others.forEach(other => {
-        creditor.entries.push({ id:uid(), date, desc, amount:parseFloat(share.toFixed(2)), debtorId:other.id });
-      });
+      const owingPeople = g.people.filter(p => selectedOwers.has(p.id));
+      const totalPeople = owingPeople.length + 1; // +1 for creditor
+      const share = parseFloat((totalAmount / totalPeople).toFixed(2));
+      const gid = uid();
+      if (owingPeople.length > 0) {
+        creditor.entries.push({ id:uid(), date, desc, amount:share, debtorId:null, ownShare:true, groupId:gid });
+        owingPeople.forEach(other => {
+          creditor.entries.push({ id:uid(), date, desc, amount:share, debtorId:other.id, groupId:gid });
+        });
+      } else {
+        // No one selected — just log own entry
+        creditor.entries.push({ id:uid(), date, desc, amount:totalAmount, debtorId:null, ownShare:true });
+      }
     } else {
-      // Custom — save each other person's amount (skip creditor — that's their own share)
-      others.forEach(other => {
+      const owingPeople = g.people.filter(p => selectedOwers.has(p.id));
+      const gid = uid();
+      const myShare = parseFloat(document.getElementById(`custom_${creditor.id}`)?.value || '0');
+      if (!isNaN(myShare) && myShare > 0) {
+        creditor.entries.push({ id:uid(), date, desc, amount:myShare, debtorId:null, ownShare:true, groupId:gid });
+      }
+      owingPeople.forEach(other => {
         const val = parseFloat(document.getElementById(`custom_${other.id}`)?.value || '0');
         if (!isNaN(val) && val > 0) {
-          creditor.entries.push({ id:uid(), date, desc, amount:val, debtorId:other.id });
+          creditor.entries.push({ id:uid(), date, desc, amount:val, debtorId:other.id, groupId:gid });
         }
       });
     }
@@ -1040,41 +1149,165 @@
     closePeriodModal(); save(); renderPeople();
   }
 
-  // ═══ EDIT ENTRY ═══
-  let editingEntry = null;
-  function openEditEntry(personId, entryId) {
+  // ═══ EDIT ENTRY / GROUP ═══
+  let editingEntry = null; // { personId, entryIds: [] }
+  const editCustomEdited = new Set();
+
+  function openEditGroup(personId, idsStr) {
     const g = activeGroup(); if (!g) return;
     const person = g.people.find(p=>p.id===personId); if (!person) return;
-    const entry = person.entries.find(e=>e.id===entryId); if (!entry) return;
-    editingEntry = { personId, entryId };
-    editSelectedDebtorId = entry.debtorId||null;
-    document.getElementById('editEntryDate').value = entry.date||'';
-    document.getElementById('editEntryDesc').value = entry.desc||'';
-    document.getElementById('editEntryAmount').value = entry.amount||'';
-    buildDebtorSelector('editPayerSelector','editPayerGroup', personId, entry.debtorId||null);
+    const ids = idsStr.split(',');
+    const entries = ids.map(id => person.entries.find(e=>e.id===id)).filter(Boolean);
+    if (!entries.length) return;
+
+    editingEntry = { personId, entryIds: ids };
+    editCustomEdited.clear();
+
+    const first = entries[0];
+    document.getElementById('editEntryDate').value = first.date||'';
+    document.getElementById('editEntryDesc').value = first.desc||'';
+
+    const groupTotal = entries.reduce((s,e) => s+parseFloat(e.amount), 0);
+    document.getElementById('editEntryAmount').value = groupTotal.toFixed(2);
+
+    const others = g.people.filter(p=>p.id!==personId);
+
+    // For 2-person: show simple debtor selector
+    if (g.people.length < 3) {
+      document.getElementById('editSplitGroup').style.display = 'none';
+      buildDebtorSelector('editPayerSelector','editPayerGroup', personId, first.debtorId||null);
+    } else {
+      // For 3+: show per-person amount rows
+      document.getElementById('editPayerGroup').style.display = 'none';
+      document.getElementById('editSplitGroup').style.display = '';
+      buildEditSplitRows(personId, entries, groupTotal);
+    }
+
     document.getElementById('editEntryModal').classList.add('open');
     setTimeout(() => document.getElementById('editEntryDesc').focus(), 100);
   }
+
+  function buildEditSplitRows(creditorId, entries, total) {
+    const g = activeGroup(); if (!g) return;
+    const allPeople = [g.people.find(p=>p.id===creditorId), ...g.people.filter(p=>p.id!==creditorId)];
+    const rows = document.getElementById('editCustomSplitRows');
+    editCustomEdited.clear();
+
+    // Find creditor's own share entry
+    const creditor = g.people.find(p=>p.id===creditorId);
+    const ownEntry = (creditor?.entries||[]).find(e => e.ownShare && entries.some(x=>x.desc===e.desc && x.date===e.date));
+    const myShare = ownEntry ? parseFloat(ownEntry.amount) : (total / allPeople.length);
+
+    rows.innerHTML = allPeople.map((p, i) => {
+      const isCreditor = p.id === creditorId;
+      const debtEntry = entries.find(e=>e.debtorId===p.id);
+      const val = isCreditor ? myShare : (debtEntry ? parseFloat(debtEntry.amount) : (total / allPeople.length));
+      return `<div class="custom-split-row">
+        <div class="custom-split-name" style="${isCreditor?'color:var(--accent);font-weight:600':''}">${escHtml(p.name)}</div>
+        <input type="number" class="custom-split-input" id="editcustom_${p.id}"
+          placeholder="0.00" step="0.01" min="0" inputmode="decimal"
+          value="${val.toFixed(2)}"
+          oninput="onEditCustomInput('${p.id}','${creditorId}')" />
+      </div>`;
+    }).join('');
+
+    updateEditPreview(creditorId, total);
+  }
+
+  function onEditAmountInput() {
+    const g = activeGroup(); if (!g || !editingEntry) return;
+    const total = parseFloat(document.getElementById('editEntryAmount').value);
+    if (isNaN(total) || total <= 0) return;
+    if (g.people.length >= 3) {
+      buildEditSplitRows(editingEntry.personId, [], total);
+    }
+  }
+
+  function onEditCustomInput(editedId, creditorId) {
+    editCustomEdited.add(editedId);
+    const g = activeGroup(); if (!g) return;
+    const total = parseFloat(document.getElementById('editEntryAmount').value);
+    if (isNaN(total) || total <= 0) return;
+
+    const allPeople = [g.people.find(p=>p.id===creditorId), ...g.people.filter(p=>p.id!==creditorId)];
+    const editedSum = allPeople
+      .filter(p => editCustomEdited.has(p.id))
+      .reduce((s,p) => { const v=parseFloat(document.getElementById(`editcustom_${p.id}`)?.value||'0'); return s+(isNaN(v)?0:v); }, 0);
+
+    const unedited = allPeople.filter(p => !editCustomEdited.has(p.id));
+    const remainder = Math.max(0, total - editedSum);
+
+    if (unedited.length === 1) {
+      const inp = document.getElementById(`editcustom_${unedited[0].id}`);
+      if (inp) inp.value = remainder.toFixed(2);
+    } else if (unedited.length > 1) {
+      const share = remainder / unedited.length;
+      unedited.forEach(p => { const inp=document.getElementById(`editcustom_${p.id}`); if(inp) inp.value=share.toFixed(2); });
+    }
+
+    updateEditPreview(creditorId, total);
+  }
+
+  function updateEditPreview(creditorId, total) {
+    const g = activeGroup(); if (!g) return;
+    const allPeople = [g.people.find(p=>p.id===creditorId), ...g.people.filter(p=>p.id!==creditorId)];
+    const sum = allPeople.reduce((s,p) => { const v=parseFloat(document.getElementById(`editcustom_${p.id}`)?.value||'0'); return s+(isNaN(v)?0:v); }, 0);
+    const diff = total - sum;
+    const el = document.getElementById('editSplitPreview');
+    if (Math.abs(diff) < 0.01) { el.textContent='✓ Adds up correctly'; el.style.color='var(--accent)'; }
+    else { el.textContent=`£${Math.abs(diff).toFixed(2)} ${diff>0?'unallocated':'over by'}`; el.style.color='var(--accent2)'; }
+  }
+
   function closeEditEntry() { document.getElementById('editEntryModal').classList.remove('open'); editingEntry=null; }
+
   function saveEditEntry() {
     if (!editingEntry) return;
     const date = document.getElementById('editEntryDate').value;
     const desc = document.getElementById('editEntryDesc').value.trim();
-    const amount = parseFloat(document.getElementById('editEntryAmount').value);
+    const total = parseFloat(document.getElementById('editEntryAmount').value);
     if (!desc) { alert('Enter a description.'); return; }
-    if (isNaN(amount)||amount<=0) { alert('Enter a valid amount.'); return; }
+    if (isNaN(total)||total<=0) { alert('Enter a valid amount.'); return; }
     const g = activeGroup(); if (!g) return;
     const person = g.people.find(p=>p.id===editingEntry.personId); if (!person) return;
-    const entry = person.entries.find(e=>e.id===editingEntry.entryId); if (!entry) return;
-    entry.date=date; entry.desc=desc; entry.amount=amount; entry.debtorId=editSelectedDebtorId;
+
+    if (g.people.length < 3) {
+      // Simple edit — single entry
+      const entry = person.entries.find(e=>e.id===editingEntry.entryIds[0]); if (!entry) return;
+      entry.date=date; entry.desc=desc; entry.amount=total; entry.debtorId=editSelectedDebtorId;
+    } else {
+      // Find groupId from existing entries before removing
+      const oldGroupId = person.entries.find(e=>editingEntry.entryIds.includes(e.id))?.groupId;
+      // Remove all old debtor entries in this group
+      person.entries = person.entries.filter(e => !editingEntry.entryIds.includes(e.id));
+      // Remove matching ownShare entry by groupId
+      if (oldGroupId) person.entries = person.entries.filter(e => !(e.ownShare && e.groupId === oldGroupId));
+
+      const others = g.people.filter(p=>p.id!==editingEntry.personId);
+      const myShare = parseFloat(document.getElementById(`editcustom_${editingEntry.personId}`)?.value||'0');
+      const gid = uid();
+
+      if (!isNaN(myShare) && myShare > 0) {
+        person.entries.push({ id:uid(), date, desc, amount:myShare, debtorId:null, ownShare:true, groupId:gid });
+      }
+      others.forEach(other => {
+        const val = parseFloat(document.getElementById(`editcustom_${other.id}`)?.value||'0');
+        if (!isNaN(val) && val > 0) {
+          person.entries.push({ id:uid(), date, desc, amount:val, debtorId:other.id, groupId:gid });
+        }
+      });
+    }
+
     closeEditEntry(); save(); renderPeople();
   }
 
-  // ═══ DELETE ENTRY ═══
+  // ═══ DELETE ENTRY / GROUP ═══
   let pendingDelete = null;
-  function confirmDeleteEntry(personId, entryId, desc) {
-    pendingDelete = { personId, entryId };
-    document.getElementById('deleteConfirmText').innerHTML = `Are you sure you want to remove <strong style="color:var(--text)">${desc}</strong>?`;
+  function confirmDeleteGroup(personId, idsStr, desc) {
+    const ids = idsStr.split(',');
+    pendingDelete = { personId, ids };
+    const count = ids.length;
+    const extra = count > 1 ? ` (${count} entries)` : '';
+    document.getElementById('deleteConfirmText').innerHTML = `Are you sure you want to remove <strong style="color:var(--text)">${desc}</strong>${extra}?`;
     document.getElementById('deleteConfirmModal').classList.add('open');
   }
   function closeDeleteConfirm() { document.getElementById('deleteConfirmModal').classList.remove('open'); pendingDelete=null; }
@@ -1082,7 +1315,16 @@
     if (!pendingDelete) return;
     const g = activeGroup(); if (!g) return;
     const person = g.people.find(p=>p.id===pendingDelete.personId); if (!person) return;
-    person.entries = person.entries.filter(e=>e.id!==pendingDelete.entryId);
+    const toDelete = new Set(pendingDelete.ids);
+    // Also delete any ownShare entries sharing the same groupId
+    const groupIds = new Set(
+      person.entries.filter(e => toDelete.has(e.id) && e.groupId).map(e => e.groupId)
+    );
+    person.entries = person.entries.filter(e => {
+      if (toDelete.has(e.id)) return false;
+      if (e.ownShare && e.groupId && groupIds.has(e.groupId)) return false;
+      return true;
+    });
     closeDeleteConfirm(); save(); renderPeople();
   }
 
@@ -1101,12 +1343,12 @@
       html+=`<div class="ov-col"><div class="ov-col-name"><span class="person-pill" style="background:${c.bg};color:${c.color};border:1px solid ${c.border}">${escHtml(p.name)}</span></div><div class="ov-col-val">${fmt(personTotal(p))}</div></div>`;
     });
     html+=`</div>`;
-    let allEntries=[]; people.forEach((p,i) => (p.entries||[]).forEach(e => allEntries.push({...e,personName:p.name,personIdx:i})));
+    let allEntries=[]; people.forEach((p,i) => (p.entries||[]).filter(e=>!e.ownShare).forEach(e => allEntries.push({...e,personName:p.name,personIdx:i})));
     if (allEntries.length===0) { html+=`<div class="empty-state" style="padding:20px 0"><div class="empty-icon">🧾</div>No entries yet.</div>`; section.innerHTML=html; return; }
     allEntries.sort((a,b) => { if (!a.date&&!b.date) return 0; if (!a.date) return 1; if (!b.date) return -1; return a.date.localeCompare(b.date); });
     const dateSet=new Set(); people.forEach(p=>(p.entries||[]).forEach(e=>dateSet.add(e.date||'__')));
     const allDates=[...dateSet].sort((a,b)=>{ if(a==='__') return 1; if(b==='__') return -1; return a.localeCompare(b); });
-    const lookup={}; people.forEach(p=>{ lookup[p.id]={}; (p.entries||[]).forEach(e=>{ const k=e.date||'__'; if(!lookup[p.id][k]) lookup[p.id][k]=[]; lookup[p.id][k].push(e); }); });
+    const lookup={}; people.forEach(p=>{ lookup[p.id]={}; (p.entries||[]).filter(e=>!e.ownShare).forEach(e=>{ const k=e.date||'__'; if(!lookup[p.id][k]) lookup[p.id][k]=[]; lookup[p.id][k].push(e); }); });
     const rowsPerDate={}; allDates.forEach(d=>{ let max=0; people.forEach(p=>{ const a=lookup[p.id][d]||[]; if(a.length>max) max=a.length; }); rowsPerDate[d]=max; });
     const total = allEntries.reduce((s,e)=>s+parseFloat(e.amount),0);
     let headerCols=`<th>Date</th>`;
@@ -1140,7 +1382,7 @@
     const g = activeGroup();
     const el = document.getElementById('settingsCurrentGroup');
     if (!g) { el.innerHTML=`<div class="settings-row"><div class="settings-row-left"><div class="settings-row-title">No active group</div><div class="settings-row-desc">Go to Groups and select one.</div></div></div>`; return; }
-    el.innerHTML=`<div class="settings-row"><div class="settings-row-left"><div class="settings-row-title">${g.emoji||'👥'} ${escHtml(g.name)}</div><div class="settings-row-desc">${g.people.length} people · ${g.people.reduce((s,p)=>s+(p.entries||[]).length,0)} entries</div></div></div>`;
+    el.innerHTML=`<div class="settings-row"><div class="settings-row-left"><div class="settings-row-title">${g.emoji||'👥'} ${escHtml(g.name)}</div><div class="settings-row-desc">${g.people.length} people · ${g.people.reduce((s,p)=>s+(p.entries||[]).filter(e=>!e.ownShare).length,0)} entries</div></div></div>`;
   }
 
   let pendingConfirmFn = null;
@@ -1159,7 +1401,7 @@
       g.people.forEach(p=>p.entries=[]); save(); renderPeople(); renderSettings();
     });
   }
-  function confirmDeleteGroup() {
+  function confirmDeleteCurrentGroup() {
     const g = activeGroup(); if (!g) return;
     confirmDeleteGroupById(g.id);
   }
