@@ -80,6 +80,35 @@
   .form-input { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-family:'Inter',sans-serif; font-size:14px; color:var(--text); outline:none; transition:border-color 0.2s; width:100%; }
   .form-input:focus { border-color:var(--accent); }
   .form-input::placeholder { color:var(--muted); }
+  .currency-row { display:flex; gap:8px; align-items:stretch; position:relative; }
+  .currency-btn {
+    background:var(--surface2); border:1px solid var(--border); border-radius:10px;
+    padding:10px 10px; font-family:'Inter',sans-serif; font-size:13px; font-weight:600;
+    color:var(--text); cursor:pointer; flex-shrink:0; width:72px; text-align:center;
+    transition:border-color 0.2s; user-select:none;
+  }
+  .currency-btn:hover, .currency-btn.open { border-color:var(--accent); }
+  .currency-dropdown {
+    display:none; position:fixed; z-index:200;
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    overflow-y:auto; max-height:260px; min-width:220px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.5);
+  }
+  .currency-dropdown.open { display:block; }
+  .currency-opt {
+    padding:11px 14px; font-family:'Inter',sans-serif; font-size:13px; color:var(--text);
+    cursor:pointer; transition:background 0.1s; display:flex; align-items:center; gap:10px;
+  }
+  .currency-opt:hover { background:var(--surface2); }
+  .currency-opt.selected { color:var(--accent); font-weight:600; }
+  .currency-opt-code { font-weight:700; font-size:12px; width:38px; flex-shrink:0; }
+  .currency-opt-name { font-size:12px; color:var(--muted); }
+  .currency-opt.selected .currency-opt-name { color:var(--accent); }
+  .currency-rate-info {
+    font-size:11px; color:var(--muted); margin-top:5px; min-height:16px; display:flex;
+    align-items:center; gap:6px;
+  }
+  .rate-manual-wrap { display:none; margin-top:8px; }
   .form-actions { display:flex; gap:8px; }
   .btn-save { flex:1; background:var(--accent); color:#000; border:none; border-radius:10px; padding:12px; font-family:'Inter',sans-serif; font-weight:700; font-size:14px; cursor:pointer; }
   .btn-cancel { background:var(--surface2); color:var(--muted); border:1px solid var(--border); border-radius:10px; padding:12px 18px; font-family:'Inter',sans-serif; font-size:14px; cursor:pointer; }
@@ -374,8 +403,18 @@
       <input type="text" class="form-input" id="entryDesc" placeholder="e.g. KFC, Noodles…" />
     </div>
     <div class="form-group">
-      <div class="form-label">Total amount (£)</div>
-      <input type="number" class="form-input" id="entryAmount" placeholder="0.00" step="0.01" min="0" inputmode="decimal" oninput="onAmountInput()" />
+      <div class="form-label" id="amountLabel">Total amount</div>
+      <div class="currency-row">
+        <button type="button" class="currency-btn" id="currencyBtn" onclick="toggleCurrencyDropdown()">GBP</button>
+        <input type="number" class="form-input" id="entryAmount" placeholder="0.00" step="0.01" min="0" inputmode="decimal" oninput="onAmountInput()" />
+      </div>
+      <div class="currency-dropdown" id="currencyDropdown"></div>
+      <div class="currency-rate-info" id="rateInfo"></div>
+      <div class="rate-manual-wrap" id="rateManualWrap">
+        <div class="form-label" style="margin-bottom:6px" id="manualRateLabel">How much is 1 USD in GBP?</div>
+        <input type="number" class="form-input" id="manualRate" placeholder="e.g. 0.79" step="0.0001" min="0" inputmode="decimal" oninput="onManualRateInput()" />
+        <div id="manualRatePreview" class="currency-rate-info" style="margin-top:4px"></div>
+      </div>
     </div>
     <div class="form-group" id="oweGroup" style="display:none">
       <div class="form-label">Who owes you this?</div>
@@ -427,6 +466,18 @@
         <div class="io-btn-label">Import</div>
         <div class="io-btn-desc">Load group data</div>
       </button>
+    </div>
+
+    <div class="settings-group-label">Currency</div>
+    <div class="settings-card" style="margin-bottom:24px">
+      <div class="settings-row">
+        <div class="settings-row-left">
+          <div class="settings-row-title">Base currency</div>
+          <div class="settings-row-desc">All amounts are stored and shown in this currency.</div>
+        </div>
+        <select id="baseCurrencySelect" onchange="saveBaseCurrency()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none;cursor:pointer;width:auto;min-width:80px">
+        </select>
+      </div>
     </div>
 
     <div class="settings-group-label">Data</div>
@@ -637,7 +688,7 @@
       if (g) { g.name = name; g.emoji = selectedEmoji; }
     } else {
       const id = uid();
-      state.groups.push({ id, name, emoji: selectedEmoji, period: '', people: [], activePersonId: null });
+      state.groups.push({ id, name, emoji: selectedEmoji, period: '', baseCurrency: 'GBP', people: [], activePersonId: null });
       state.activeGroupId = id;
     }
     closeGroupModal();
@@ -778,7 +829,7 @@
           html += `<div class="entry-item">
             <div class="entry-left">
               <div class="entry-desc">${escHtml(e.desc)}</div>
-              <div class="entry-date">${fmtDate(e.date)}${debtLabel}</div>
+              <div class="entry-date">${fmtDate(e.date)}${debtLabel}${e.origCurrency && e.origCurrency !== getBaseCurrency() ? ` · ${e.origAmount} ${e.origCurrency}` : ''}</div>
             </div>
             <div class="entry-amount">${fmt(e.amount)}</div>
             <div class="entry-actions">
@@ -856,6 +907,222 @@
 
   // ═══ FORM ═══
   let formOpen = false;
+  // ── CURRENCY SYSTEM ──
+  const CURRENCIES = [
+    { code:'GBP', label:'GBP — British Pound' },
+    { code:'USD', label:'USD — US Dollar' },
+    { code:'EUR', label:'EUR — Euro' },
+    { code:'AED', label:'AED — UAE Dirham' },
+    { code:'AUD', label:'AUD — Australian Dollar' },
+    { code:'CAD', label:'CAD — Canadian Dollar' },
+    { code:'CHF', label:'CHF — Swiss Franc' },
+    { code:'CNY', label:'CNY — Chinese Yuan' },
+    { code:'DKK', label:'DKK — Danish Krone' },
+    { code:'HKD', label:'HKD — Hong Kong Dollar' },
+    { code:'IDR', label:'IDR — Indonesian Rupiah' },
+    { code:'INR', label:'INR — Indian Rupee' },
+    { code:'JPY', label:'JPY — Japanese Yen' },
+    { code:'KRW', label:'KRW — South Korean Won' },
+    { code:'MYR', label:'MYR — Malaysian Ringgit' },
+    { code:'NOK', label:'NOK — Norwegian Krone' },
+    { code:'NZD', label:'NZD — New Zealand Dollar' },
+    { code:'PHP', label:'PHP — Philippine Peso' },
+    { code:'PKR', label:'PKR — Pakistani Rupee' },
+    { code:'SAR', label:'SAR — Saudi Riyal' },
+    { code:'SEK', label:'SEK — Swedish Krona' },
+    { code:'SGD', label:'SGD — Singapore Dollar' },
+    { code:'THB', label:'THB — Thai Baht' },
+    { code:'TRY', label:'TRY — Turkish Lira' },
+    { code:'ZAR', label:'ZAR — South African Rand' },
+  ];
+  const CURRENCY_SYMBOLS = { GBP:'£',USD:'$',EUR:'€',AED:'د.إ',AUD:'A$',CAD:'C$',CHF:'Fr',CNY:'¥',DKK:'kr',HKD:'HK$',IDR:'Rp',INR:'₹',JPY:'¥',KRW:'₩',MYR:'RM',NOK:'kr',NZD:'NZ$',PHP:'₱',PKR:'₨',SAR:'﷼',SEK:'kr',SGD:'S$',THB:'฿',TRY:'₺',ZAR:'R' };
+
+  // Cache: { 'USD-GBP-2026-06-17': 0.79, ... }
+  function getCacheKey(from, to) {
+    const today = new Date().toISOString().split('T')[0];
+    return `fxcache_${from}_${to}_${today}`;
+  }
+  function getCachedRate(from, to) {
+    try { const v = localStorage.getItem(getCacheKey(from,to)); return v ? parseFloat(v) : null; } catch(e) { return null; }
+  }
+  function setCachedRate(from, to, rate) {
+    try {
+      // Clear old cache entries
+      Object.keys(localStorage).filter(k=>k.startsWith('fxcache_')).forEach(k=>{
+        const parts = k.split('_'); const dateStr = parts[parts.length-1];
+        const today = new Date().toISOString().split('T')[0];
+        if (dateStr !== today) localStorage.removeItem(k);
+      });
+      localStorage.setItem(getCacheKey(from,to), rate);
+    } catch(e) {}
+  }
+
+  let currentRate = 1; // rate from entryCurrency to baseCurrency
+  let rateLoading = false;
+
+  function getBaseCurrency() {
+    const g = activeGroup();
+    return (g && g.baseCurrency) ? g.baseCurrency : 'GBP';
+  }
+
+  let selectedCurrencyCode = 'GBP';
+
+  function buildCurrencySelect() {
+    const base = getBaseCurrency();
+    selectedCurrencyCode = base;
+    const btn = document.getElementById('currencyBtn');
+    if (btn) btn.textContent = base;
+    currentRate = 1;
+    const ri = document.getElementById('rateInfo');
+    if (ri) ri.textContent = '';
+    const mw = document.getElementById('rateManualWrap');
+    if (mw) mw.style.display = 'none';
+    buildDropdownList();
+  }
+
+  function buildDropdownList() {
+    const dropdown = document.getElementById('currencyDropdown');
+    if (!dropdown) return;
+    dropdown.innerHTML = CURRENCIES.map(c =>
+      `<div class="currency-opt ${c.code===selectedCurrencyCode?'selected':''}" onclick="selectCurrency('${c.code}')">
+        <span class="currency-opt-code">${c.code}</span>
+        <span class="currency-opt-name">${c.label.split(' — ')[1]}</span>
+      </div>`
+    ).join('');
+  }
+
+  function toggleCurrencyDropdown() {
+    const btn = document.getElementById('currencyBtn');
+    const dropdown = document.getElementById('currencyDropdown');
+    if (!dropdown) return;
+    const isOpen = dropdown.classList.contains('open');
+    if (isOpen) { closeCurrencyDropdown(); return; }
+    // Position dropdown below button
+    const rect = btn.getBoundingClientRect();
+    dropdown.style.top = (rect.bottom + 4) + 'px';
+    dropdown.style.left = rect.left + 'px';
+    dropdown.classList.add('open');
+    btn.classList.add('open');
+    buildDropdownList();
+    // Scroll selected into view
+    setTimeout(() => {
+      const sel = dropdown.querySelector('.selected');
+      if (sel) sel.scrollIntoView({ block:'nearest' });
+    }, 50);
+  }
+
+  function closeCurrencyDropdown() {
+    document.getElementById('currencyDropdown')?.classList.remove('open');
+    document.getElementById('currencyBtn')?.classList.remove('open');
+  }
+
+  function selectCurrency(code) {
+    selectedCurrencyCode = code;
+    const btn = document.getElementById('currencyBtn');
+    if (btn) btn.textContent = code;
+    closeCurrencyDropdown();
+    onCurrencyChange();
+  }
+
+  async function onCurrencyChange() {
+    const from = selectedCurrencyCode;
+    const to = getBaseCurrency();
+    // Update manual rate label to reflect selected currencies
+    const lbl = document.getElementById('manualRateLabel');
+    if (lbl) lbl.textContent = `How much is 1 ${from} in ${to}?`;
+    if (!from || from === to) {
+      currentRate = 1;
+      const ri = document.getElementById('rateInfo');
+      if (ri) ri.innerHTML = '';
+      const mw = document.getElementById('rateManualWrap');
+      if (mw) mw.style.display = 'none';
+      onAmountInput(); return;
+    }
+    await fetchRate(from, to);
+    onAmountInput();
+  }
+
+  function onManualRateInput() {
+    const from = selectedCurrencyCode;
+    const to = getBaseCurrency();
+    const val = parseFloat(document.getElementById('manualRate')?.value);
+    const preview = document.getElementById('manualRatePreview');
+    if (!isNaN(val) && val > 0 && preview) {
+      preview.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${val.toFixed(4)} ${to}</span>`;
+    } else if (preview) {
+      preview.innerHTML = '';
+    }
+    onAmountInput();
+  }
+
+  async function fetchRate(from, to) {
+    const infoEl = document.getElementById('rateInfo');
+    const manualWrap = document.getElementById('rateManualWrap');
+
+    // Check cache first
+    const cached = getCachedRate(from, to);
+    if (cached) {
+      currentRate = cached;
+      infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${cached.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(today's rate)</span>`;
+      manualWrap.style.display = 'none';
+      return;
+    }
+
+    infoEl.innerHTML = `<span style="color:var(--muted)">Fetching live rate…</span>`;
+
+    // Try Frankfurter first
+    let rate = null;
+    try {
+      const res = await fetch(`https://api.frankfurter.app/latest?from=${from}&to=${to}`);
+      if (res.ok) {
+        const data = await res.json();
+        rate = data.rates?.[to];
+      }
+    } catch(e) {}
+
+    // Fallback: try open.er-api.com (no key needed)
+    if (!rate) {
+      try {
+        const res2 = await fetch(`https://open.er-api.com/v6/latest/${from}`);
+        if (res2.ok) {
+          const data2 = await res2.json();
+          rate = data2.rates?.[to];
+        }
+      } catch(e) {}
+    }
+
+    if (rate) {
+      currentRate = rate;
+      setCachedRate(from, to, rate);
+      infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${rate.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(live)</span>`;
+      manualWrap.style.display = 'none';
+    } else {
+      // Both APIs failed — show manual input
+      currentRate = 1;
+      infoEl.innerHTML = `<span style="color:var(--accent2);font-size:11px">⚠ No internet? Enter the rate below</span>`;
+      manualWrap.style.display = '';
+      document.getElementById('manualRate').focus();
+    }
+  }
+
+  function getEffectiveRate() {
+    const from = selectedCurrencyCode;
+    const to = getBaseCurrency();
+    if (!from || from === to) return 1;
+    const manualWrap = document.getElementById('rateManualWrap');
+    if (manualWrap && manualWrap.style.display !== 'none') {
+      const manual = parseFloat(document.getElementById('manualRate')?.value);
+      return isNaN(manual) || manual <= 0 ? 1 : manual;
+    }
+    return currentRate;
+  }
+
+  function getConvertedAmount() {
+    const raw = parseFloat(document.getElementById('entryAmount')?.value);
+    if (isNaN(raw) || raw <= 0) return 0;
+    return raw * getEffectiveRate();
+  }
+
   let splitMode = 'equal';
   let selectedOwers = new Set(); // IDs of people who owe you
 
@@ -898,6 +1165,8 @@
       document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
       document.getElementById('entryDesc').value = '';
       document.getElementById('entryAmount').value = '';
+      buildCurrencySelect();
+      currentRate = 1;
       splitMode = 'equal';
       document.getElementById('splitEqualBtn').classList.add('active');
       document.getElementById('splitCustomBtn').classList.remove('active');
@@ -1015,10 +1284,13 @@
 
     if (splitMode === 'equal') {
       document.getElementById('customSplitRows').style.display = 'none';
+      const converted = getConvertedAmount();
       if (!isNaN(amount) && amount > 0 && owingPeople.length > 0) {
-        const share = amount / totalPeople;
+        const share = converted / totalPeople;
+        const base = getBaseCurrency();
+        const sym = CURRENCY_SYMBOLS[base] || base;
         const preview = document.getElementById('splitPreview');
-        preview.textContent = `£${share.toFixed(2)} each — your share already covered`;
+        preview.textContent = `${sym}${share.toFixed(2)} each — your share already covered`;
         preview.style.color = 'var(--muted)';
       } else if (owingPeople.length === 0) {
         document.getElementById('splitPreview').textContent = 'Select at least one person';
@@ -1047,7 +1319,11 @@
   function saveEntry() {
     const date = document.getElementById('entryDate').value;
     const desc = document.getElementById('entryDesc').value.trim();
-    const totalAmount = parseFloat(document.getElementById('entryAmount').value);
+    const rawAmount = parseFloat(document.getElementById('entryAmount').value);
+    const entryCur = selectedCurrencyCode || getBaseCurrency();
+    const totalAmount = parseFloat((rawAmount * getEffectiveRate()).toFixed(2));
+    const originalAmount = rawAmount;
+    const originalCurrency = entryCur;
     if (!desc) { alert('Please enter a description.'); return; }
     if (isNaN(totalAmount) || totalAmount <= 0) { alert('Please enter a valid amount.'); return; }
     const g = activeGroup(); if (!g) return;
@@ -1383,6 +1659,16 @@
     const el = document.getElementById('settingsCurrentGroup');
     if (!g) { el.innerHTML=`<div class="settings-row"><div class="settings-row-left"><div class="settings-row-title">No active group</div><div class="settings-row-desc">Go to Groups and select one.</div></div></div>`; return; }
     el.innerHTML=`<div class="settings-row"><div class="settings-row-left"><div class="settings-row-title">${g.emoji||'👥'} ${escHtml(g.name)}</div><div class="settings-row-desc">${g.people.length} people · ${g.people.reduce((s,p)=>s+(p.entries||[]).filter(e=>!e.ownShare).length,0)} entries</div></div></div>`;
+    // Build base currency select
+    const sel = document.getElementById('baseCurrencySelect');
+    if (sel) {
+      sel.innerHTML = CURRENCIES.map(c => `<option value="${c.code}" ${c.code===(g.baseCurrency||'GBP')?'selected':''}>${c.label}</option>`).join('');
+    }
+  }
+  function saveBaseCurrency() {
+    const g = activeGroup(); if (!g) return;
+    g.baseCurrency = document.getElementById('baseCurrencySelect').value;
+    save();
   }
 
   let pendingConfirmFn = null;
@@ -1506,6 +1792,13 @@
   document.getElementById('entryAmount').addEventListener('keydown', e=>{ if(e.key==='Enter') saveEntry(); });
   document.getElementById('groupNameInput').addEventListener('keydown', e=>{ if(e.key==='Enter') saveGroupModal(); });
   document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e=>{ if(e.target===m) m.classList.remove('open'); }));
+  document.addEventListener('click', e => {
+    const btn = document.getElementById('currencyBtn');
+    const dd = document.getElementById('currencyDropdown');
+    if (dd && dd.classList.contains('open') && !btn?.contains(e.target) && !dd.contains(e.target)) {
+      closeCurrencyDropdown();
+    }
+  });
 
   // ═══ INIT ═══
   // Migrate old data if exists
