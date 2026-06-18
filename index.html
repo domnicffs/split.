@@ -315,17 +315,31 @@
       <input type="text" class="form-input" id="editEntryDesc" />
     </div>
     <div class="form-group" style="margin-bottom:12px">
-      <div class="form-label">Total amount (£)</div>
-      <input type="number" class="form-input" id="editEntryAmount" step="0.01" min="0" inputmode="decimal" oninput="onEditAmountInput()" />
+      <div class="form-label">Total amount</div>
+      <div class="currency-row">
+        <button type="button" class="currency-btn" id="editCurrencyBtn" onclick="toggleEditCurrencyDropdown()">GBP</button>
+        <input type="number" class="form-input" id="editEntryAmount" step="0.01" min="0" inputmode="decimal" oninput="onEditAmountInput()" />
+      </div>
+      <div class="currency-rate-info" id="editRateInfo"></div>
+      <div class="rate-manual-wrap" id="editRateManualWrap">
+        <div class="form-label" style="margin-bottom:6px" id="editManualRateLabel">How much is 1 USD in GBP?</div>
+        <input type="number" class="form-input" id="editManualRate" placeholder="e.g. 0.79" step="0.0001" min="0" inputmode="decimal" oninput="onEditManualRateInput()" />
+        <div id="editManualRatePreview" class="currency-rate-info" style="margin-top:4px"></div>
+      </div>
+      <div class="currency-dropdown" id="editCurrencyDropdown"></div>
     </div>
-    <div class="form-group" id="editSplitGroup" style="display:none;margin-bottom:12px">
-      <div class="form-label">Amounts per person</div>
-      <div class="custom-split-rows" id="editCustomSplitRows"></div>
-      <div id="editSplitPreview" class="split-preview" style="margin-top:6px"></div>
-    </div>
-    <div class="form-group" id="editPayerGroup" style="display:none">
+    <div class="form-group" id="editOweGroup" style="display:none;margin-bottom:14px">
       <div class="form-label">Who owes you this?</div>
-      <div class="payer-selector" id="editPayerSelector"></div>
+      <div class="person-toggle-wrap" id="editOweSelector"></div>
+    </div>
+    <div class="form-group" id="editSplitToggleGroup" style="display:none">
+      <div class="form-label">How to split?</div>
+      <div class="split-toggle">
+        <button class="split-toggle-btn active" id="editSplitEqualBtn" onclick="setEditSplitMode('equal')">Split equally</button>
+        <button class="split-toggle-btn" id="editSplitCustomBtn" onclick="setEditSplitMode('custom')">Custom</button>
+      </div>
+      <div id="editSplitPreview" class="split-preview"></div>
+      <div class="custom-split-rows" id="editCustomSplitRows" style="display:none"></div>
     </div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeEditEntry()">Cancel</button>
@@ -924,6 +938,7 @@
     { code:'JPY', label:'JPY — Japanese Yen' },
     { code:'KRW', label:'KRW — South Korean Won' },
     { code:'MYR', label:'MYR — Malaysian Ringgit' },
+    { code:'MVR', label:'MVR — Maldivian Rufiyaa' },
     { code:'NOK', label:'NOK — Norwegian Krone' },
     { code:'NZD', label:'NZD — New Zealand Dollar' },
     { code:'PHP', label:'PHP — Philippine Peso' },
@@ -935,7 +950,7 @@
     { code:'TRY', label:'TRY — Turkish Lira' },
     { code:'ZAR', label:'ZAR — South African Rand' },
   ];
-  const CURRENCY_SYMBOLS = { GBP:'£',USD:'$',EUR:'€',AED:'د.إ',AUD:'A$',CAD:'C$',CHF:'Fr',CNY:'¥',DKK:'kr',HKD:'HK$',IDR:'Rp',INR:'₹',JPY:'¥',KRW:'₩',MYR:'RM',NOK:'kr',NZD:'NZ$',PHP:'₱',PKR:'₨',SAR:'﷼',SEK:'kr',SGD:'S$',THB:'฿',TRY:'₺',ZAR:'R' };
+  const CURRENCY_SYMBOLS = { GBP:'£',USD:'$',EUR:'€',AED:'د.إ',AUD:'A$',CAD:'C$',CHF:'Fr',CNY:'¥',DKK:'kr',HKD:'HK$',IDR:'Rp',INR:'₹',JPY:'¥',KRW:'₩',MYR:'RM',MVR:'Rf',NOK:'kr',NZD:'NZ$',PHP:'₱',PKR:'₨',SAR:'﷼',SEK:'kr',SGD:'S$',THB:'฿',TRY:'₺',ZAR:'R' };
 
   // Cache: { 'USD-GBP-2026-06-17': 0.79, ... }
   function getCacheKey(from, to) {
@@ -1425,6 +1440,260 @@
     closePeriodModal(); save(); renderPeople();
   }
 
+  // ═══ EDIT CURRENCY SYSTEM ═══
+  let editSelectedCurrencyCode = 'GBP';
+  let editCurrentRate = 1;
+
+  function buildEditCurrencySelect(origCurrency) {
+    const base = getBaseCurrency();
+    editSelectedCurrencyCode = origCurrency || base;
+    const btn = document.getElementById('editCurrencyBtn');
+    if (btn) btn.textContent = editSelectedCurrencyCode;
+    editCurrentRate = 1;
+    const ri = document.getElementById('editRateInfo');
+    if (ri) ri.textContent = '';
+    const mw = document.getElementById('editRateManualWrap');
+    if (mw) mw.style.display = 'none';
+    buildEditDropdownList();
+    if (editSelectedCurrencyCode !== base) {
+      onEditCurrencyChange(true);
+    }
+  }
+
+  function buildEditDropdownList() {
+    const dropdown = document.getElementById('editCurrencyDropdown');
+    if (!dropdown) return;
+    dropdown.innerHTML = CURRENCIES.map(c =>
+      `<div class="currency-opt ${c.code===editSelectedCurrencyCode?'selected':''}" onclick="selectEditCurrency('${c.code}')">
+        <span class="currency-opt-code">${c.code}</span>
+        <span class="currency-opt-name">${c.label.split(' — ')[1]}</span>
+      </div>`
+    ).join('');
+  }
+
+  function toggleEditCurrencyDropdown() {
+    const btn = document.getElementById('editCurrencyBtn');
+    const dropdown = document.getElementById('editCurrencyDropdown');
+    if (!dropdown) return;
+    const isOpen = dropdown.classList.contains('open');
+    if (isOpen) { closeEditCurrencyDropdown(); return; }
+    const rect = btn.getBoundingClientRect();
+    dropdown.style.top = (rect.bottom + 4) + 'px';
+    dropdown.style.left = rect.left + 'px';
+    dropdown.classList.add('open');
+    btn.classList.add('open');
+    buildEditDropdownList();
+    setTimeout(() => {
+      const sel = dropdown.querySelector('.selected');
+      if (sel) sel.scrollIntoView({ block:'nearest' });
+    }, 50);
+  }
+
+  function closeEditCurrencyDropdown() {
+    document.getElementById('editCurrencyDropdown')?.classList.remove('open');
+    document.getElementById('editCurrencyBtn')?.classList.remove('open');
+  }
+
+  function selectEditCurrency(code) {
+    editSelectedCurrencyCode = code;
+    const btn = document.getElementById('editCurrencyBtn');
+    if (btn) btn.textContent = code;
+    closeEditCurrencyDropdown();
+    onEditCurrencyChange();
+  }
+
+  async function onEditCurrencyChange(skipRecalc) {
+    const from = editSelectedCurrencyCode;
+    const to = getBaseCurrency();
+    const lbl = document.getElementById('editManualRateLabel');
+    if (lbl) lbl.textContent = `How much is 1 ${from} in ${to}?`;
+    if (!from || from === to) {
+      editCurrentRate = 1;
+      const ri = document.getElementById('editRateInfo');
+      if (ri) ri.innerHTML = '';
+      const mw = document.getElementById('editRateManualWrap');
+      if (mw) mw.style.display = 'none';
+      return;
+    }
+    await fetchEditRate(from, to);
+  }
+
+  async function fetchEditRate(from, to) {
+    const infoEl = document.getElementById('editRateInfo');
+    const manualWrap = document.getElementById('editRateManualWrap');
+
+    const cached = getCachedRate(from, to);
+    if (cached) {
+      editCurrentRate = cached;
+      infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${cached.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(today's rate)</span>`;
+      manualWrap.style.display = 'none';
+      return;
+    }
+
+    infoEl.innerHTML = `<span style="color:var(--muted)">Fetching live rate…</span>`;
+    let rate = null;
+    try {
+      const res = await fetch(`https://api.frankfurter.app/latest?from=${from}&to=${to}`);
+      if (res.ok) { const data = await res.json(); rate = data.rates?.[to]; }
+    } catch(e) {}
+    if (!rate) {
+      try {
+        const res2 = await fetch(`https://open.er-api.com/v6/latest/${from}`);
+        if (res2.ok) { const data2 = await res2.json(); rate = data2.rates?.[to]; }
+      } catch(e) {}
+    }
+
+    if (rate) {
+      editCurrentRate = rate;
+      setCachedRate(from, to, rate);
+      infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${rate.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(live)</span>`;
+      manualWrap.style.display = 'none';
+    } else {
+      editCurrentRate = 1;
+      infoEl.innerHTML = `<span style="color:var(--accent2);font-size:11px">⚠ No internet? Enter the rate below</span>`;
+      manualWrap.style.display = '';
+    }
+  }
+
+  function onEditManualRateInput() {
+    const from = editSelectedCurrencyCode;
+    const to = getBaseCurrency();
+    const val = parseFloat(document.getElementById('editManualRate')?.value);
+    const preview = document.getElementById('editManualRatePreview');
+    if (!isNaN(val) && val > 0 && preview) {
+      preview.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${val.toFixed(4)} ${to}</span>`;
+    } else if (preview) {
+      preview.innerHTML = '';
+    }
+  }
+
+  function getEditEffectiveRate() {
+    const from = editSelectedCurrencyCode;
+    const to = getBaseCurrency();
+    if (!from || from === to) return 1;
+    const manualWrap = document.getElementById('editRateManualWrap');
+    if (manualWrap && manualWrap.style.display !== 'none') {
+      const manual = parseFloat(document.getElementById('editManualRate')?.value);
+      return isNaN(manual) || manual <= 0 ? 1 : manual;
+    }
+    return editCurrentRate;
+  }
+
+  document.addEventListener('click', e => {
+    const btn = document.getElementById('editCurrencyBtn');
+    const dd = document.getElementById('editCurrencyDropdown');
+    if (dd && dd.classList.contains('open') && !btn?.contains(e.target) && !dd.contains(e.target)) {
+      closeEditCurrencyDropdown();
+    }
+  });
+
+  // ═══ EDIT SPLIT / OWE SYSTEM (mirrors add form) ═══
+  let editSplitMode = 'equal';
+  let editSelectedOwers = new Set();
+  const editCustomEditedSet = new Set();
+
+  function buildEditOweSelector(creditorId, preselectedDebtorIds) {
+    const g = activeGroup(); if (!g) return;
+    const others = g.people.filter(p => p.id !== creditorId);
+    const wrap = document.getElementById('editOweSelector');
+    if (!wrap) return;
+    // Default: preselected debtors if provided, else all
+    editSelectedOwers = preselectedDebtorIds && preselectedDebtorIds.length
+      ? new Set(preselectedDebtorIds)
+      : new Set(others.map(p => p.id));
+    wrap.innerHTML = others.map((p) => {
+      const idx = g.people.findIndex(x => x.id === p.id);
+      const c = personColor(idx);
+      const isSel = editSelectedOwers.has(p.id);
+      return `<button class="person-toggle-btn ${isSel?'selected':''}" id="edit_ower_${p.id}"
+        style="${isSel ? `background:${c.color};border-color:${c.color};color:#000` : ''}"
+        onclick="toggleEditOwer('${p.id}','${creditorId}')">${escHtml(p.name)}</button>`;
+    }).join('');
+  }
+
+  function toggleEditOwer(personId, creditorId) {
+    const g = activeGroup(); if (!g) return;
+    const idx = g.people.findIndex(x => x.id === personId);
+    const c = personColor(idx);
+    const btn = document.getElementById(`edit_ower_${personId}`);
+    if (editSelectedOwers.has(personId)) {
+      editSelectedOwers.delete(personId);
+      btn.classList.remove('selected');
+      btn.style.cssText = '';
+    } else {
+      editSelectedOwers.add(personId);
+      btn.classList.add('selected');
+      btn.style.cssText = `background:${c.color};border-color:${c.color};color:#000`;
+    }
+    onEditAmountInput();
+  }
+
+  function setEditSplitMode(mode) {
+    editSplitMode = mode;
+    document.getElementById('editSplitEqualBtn').classList.toggle('active', mode === 'equal');
+    document.getElementById('editSplitCustomBtn').classList.toggle('active', mode === 'custom');
+    onEditAmountInput();
+  }
+
+  function buildEditCustomRowsV2(creditorId) {
+    const g = activeGroup(); if (!g) return;
+    const raw = parseFloat(document.getElementById('editEntryAmount').value);
+    const converted = raw * getEditEffectiveRate();
+    const creditor = g.people.find(p=>p.id===creditorId); if (!creditor) return;
+    const owingPeople = g.people.filter(p => editSelectedOwers.has(p.id));
+    const allPeople = [creditor, ...owingPeople];
+    const rows = document.getElementById('editCustomSplitRows');
+    rows.style.display = '';
+    editCustomEditedSet.clear();
+
+    const defaultShare = (!isNaN(converted) && converted > 0) ? (converted / allPeople.length).toFixed(2) : '';
+
+    rows.innerHTML = allPeople.map((p) => {
+      const isCreditor = p.id === creditor.id;
+      return `<div class="custom-split-row">
+        <div class="custom-split-name" style="${isCreditor?'color:var(--accent);font-weight:600':''}">${escHtml(p.name)}</div>
+        <input type="number" class="custom-split-input" id="editrow_${p.id}"
+          placeholder="0.00" step="0.01" min="0" inputmode="decimal"
+          value="${defaultShare}"
+          ${isCreditor?'style="border-color:var(--accent)"':''}
+          oninput="onEditCustomRowInput('${p.id}','${creditorId}')" />
+      </div>`;
+    }).join('');
+  }
+
+  function onEditCustomRowInput(editedId, creditorId) {
+    editCustomEditedSet.add(editedId);
+    const g = activeGroup(); if (!g) return;
+    const creditor = g.people.find(p=>p.id===creditorId); if (!creditor) return;
+    const raw = parseFloat(document.getElementById('editEntryAmount').value);
+    const totalAmount = raw * getEditEffectiveRate();
+    if (isNaN(totalAmount) || totalAmount <= 0) return;
+
+    const owingPeople = g.people.filter(p => editSelectedOwers.has(p.id));
+    const allPeople = [creditor, ...owingPeople];
+
+    const editedSum = allPeople
+      .filter(p => editCustomEditedSet.has(p.id) || p.id === creditor.id)
+      .reduce((s,p) => { const v=parseFloat(document.getElementById(`editrow_${p.id}`)?.value||'0'); return s+(isNaN(v)?0:v); }, 0);
+
+    const unedited = allPeople.filter(p => p.id !== creditor.id && !editCustomEditedSet.has(p.id));
+    const remainder = Math.max(0, totalAmount - editedSum);
+
+    if (unedited.length === 1) {
+      const inp = document.getElementById(`editrow_${unedited[0].id}`);
+      if (inp) inp.value = remainder.toFixed(2);
+    } else if (unedited.length > 1) {
+      const share = remainder / unedited.length;
+      unedited.forEach(p => { const inp=document.getElementById(`editrow_${p.id}`); if(inp) inp.value=share.toFixed(2); });
+    }
+
+    const allSum = allPeople.reduce((s,p) => { const v=parseFloat(document.getElementById(`editrow_${p.id}`)?.value||'0'); return s+(isNaN(v)?0:v); }, 0);
+    const diff = totalAmount - allSum;
+    const preview = document.getElementById('editSplitPreview');
+    if (Math.abs(diff) < 0.01) { preview.textContent='✓ Adds up correctly'; preview.style.color='var(--accent)'; }
+    else { preview.textContent=`£${Math.abs(diff).toFixed(2)} ${diff>0?'unallocated':'over by'}`; preview.style.color='var(--accent2)'; }
+  }
+
   // ═══ EDIT ENTRY / GROUP ═══
   let editingEntry = null; // { personId, entryIds: [] }
   const editCustomEdited = new Set();
@@ -1437,101 +1706,119 @@
     if (!entries.length) return;
 
     editingEntry = { personId, entryIds: ids };
-    editCustomEdited.clear();
 
     const first = entries[0];
     document.getElementById('editEntryDate').value = first.date||'';
     document.getElementById('editEntryDesc').value = first.desc||'';
 
     const groupTotal = entries.reduce((s,e) => s+parseFloat(e.amount), 0);
-    document.getElementById('editEntryAmount').value = groupTotal.toFixed(2);
 
-    const others = g.people.filter(p=>p.id!==personId);
+    // Restore original currency/amount if present, else show base amount
+    const origCur = first.origCurrency || getBaseCurrency();
+    const origAmt = first.origAmount || groupTotal;
+    document.getElementById('editEntryAmount').value = origAmt;
+    buildEditCurrencySelect(origCur);
 
-    // For 2-person: show simple debtor selector
-    if (g.people.length < 3) {
-      document.getElementById('editSplitGroup').style.display = 'none';
-      buildDebtorSelector('editPayerSelector','editPayerGroup', personId, first.debtorId||null);
+    // Existing debtor IDs for this bill
+    const existingDebtorIds = entries.map(e => e.debtorId).filter(Boolean);
+
+    // Default split mode: if all shares are roughly equal, default to equal, else custom
+    const shares = entries.map(e => parseFloat(e.amount));
+    const allEqual = shares.length > 0 && shares.every(s => Math.abs(s - shares[0]) < 0.02);
+    editSplitMode = allEqual ? 'equal' : 'custom';
+    document.getElementById('editSplitEqualBtn').classList.toggle('active', editSplitMode === 'equal');
+    document.getElementById('editSplitCustomBtn').classList.toggle('active', editSplitMode === 'custom');
+
+    if (g.people.length >= 2) {
+      document.getElementById('editOweGroup').style.display = '';
+      document.getElementById('editSplitToggleGroup').style.display = '';
+      buildEditOweSelector(personId, existingDebtorIds);
+      if (editSplitMode === 'custom') {
+        buildEditCustomRowsWithValues(personId, entries, groupTotal);
+      } else {
+        document.getElementById('editCustomSplitRows').style.display = 'none';
+        updateEditEqualPreview(personId);
+      }
     } else {
-      // For 3+: show per-person amount rows
-      document.getElementById('editPayerGroup').style.display = 'none';
-      document.getElementById('editSplitGroup').style.display = '';
-      buildEditSplitRows(personId, entries, groupTotal);
+      document.getElementById('editOweGroup').style.display = 'none';
+      document.getElementById('editSplitToggleGroup').style.display = 'none';
     }
 
     document.getElementById('editEntryModal').classList.add('open');
     setTimeout(() => document.getElementById('editEntryDesc').focus(), 100);
   }
 
-  function buildEditSplitRows(creditorId, entries, total) {
+  function buildEditCustomRowsWithValues(creditorId, entries, total) {
     const g = activeGroup(); if (!g) return;
-    const allPeople = [g.people.find(p=>p.id===creditorId), ...g.people.filter(p=>p.id!==creditorId)];
-    const rows = document.getElementById('editCustomSplitRows');
-    editCustomEdited.clear();
-
-    // Find creditor's own share entry
+    const owingPeople = g.people.filter(p => editSelectedOwers.has(p.id));
     const creditor = g.people.find(p=>p.id===creditorId);
-    const ownEntry = (creditor?.entries||[]).find(e => e.ownShare && entries.some(x=>x.desc===e.desc && x.date===e.date));
+    const allPeople = [creditor, ...owingPeople];
+    const rows = document.getElementById('editCustomSplitRows');
+    rows.style.display = '';
+    editCustomEditedSet.clear();
+
+    const ownEntry = (creditor?.entries||[]).find(e => e.ownShare && entries.some(x=>x.groupId && x.groupId===e.groupId));
     const myShare = ownEntry ? parseFloat(ownEntry.amount) : (total / allPeople.length);
 
-    rows.innerHTML = allPeople.map((p, i) => {
+    rows.innerHTML = allPeople.map((p) => {
       const isCreditor = p.id === creditorId;
       const debtEntry = entries.find(e=>e.debtorId===p.id);
       const val = isCreditor ? myShare : (debtEntry ? parseFloat(debtEntry.amount) : (total / allPeople.length));
       return `<div class="custom-split-row">
         <div class="custom-split-name" style="${isCreditor?'color:var(--accent);font-weight:600':''}">${escHtml(p.name)}</div>
-        <input type="number" class="custom-split-input" id="editcustom_${p.id}"
+        <input type="number" class="custom-split-input" id="editrow_${p.id}"
           placeholder="0.00" step="0.01" min="0" inputmode="decimal"
           value="${val.toFixed(2)}"
-          oninput="onEditCustomInput('${p.id}','${creditorId}')" />
+          ${isCreditor?'style="border-color:var(--accent)"':''}
+          oninput="onEditCustomRowInput('${p.id}','${creditorId}')" />
       </div>`;
     }).join('');
 
-    updateEditPreview(creditorId, total);
+    const el = document.getElementById('editSplitPreview');
+    const sum = allPeople.reduce((s,p)=>s+parseFloat(document.getElementById(`editrow_${p.id}`)?.value||'0'),0);
+    const diff = total - sum;
+    if (Math.abs(diff) < 0.01) { el.textContent='✓ Adds up correctly'; el.style.color='var(--accent)'; }
+    else { el.textContent=`£${Math.abs(diff).toFixed(2)} ${diff>0?'unallocated':'over by'}`; el.style.color='var(--accent2)'; }
+  }
+
+  function updateEditEqualPreview(creditorId) {
+    const g = activeGroup(); if (!g) return;
+    const raw = parseFloat(document.getElementById('editEntryAmount').value);
+    const converted = raw * getEditEffectiveRate();
+    const owingPeople = g.people.filter(p => editSelectedOwers.has(p.id));
+    const totalPeople = owingPeople.length + 1;
+    const preview = document.getElementById('editSplitPreview');
+    if (!isNaN(converted) && converted > 0 && owingPeople.length > 0) {
+      const share = converted / totalPeople;
+      const base = getBaseCurrency();
+      const sym = CURRENCY_SYMBOLS[base] || base;
+      preview.textContent = `${sym}${share.toFixed(2)} each — your share already covered`;
+      preview.style.color = 'var(--muted)';
+    } else if (owingPeople.length === 0) {
+      preview.textContent = 'Select at least one person';
+      preview.style.color = 'var(--accent2)';
+    } else {
+      preview.textContent = '';
+    }
   }
 
   function onEditAmountInput() {
     const g = activeGroup(); if (!g || !editingEntry) return;
-    const total = parseFloat(document.getElementById('editEntryAmount').value);
-    if (isNaN(total) || total <= 0) return;
-    if (g.people.length >= 3) {
-      buildEditSplitRows(editingEntry.personId, [], total);
+    if (editSplitMode === 'equal') {
+      document.getElementById('editCustomSplitRows').style.display = 'none';
+      updateEditEqualPreview(editingEntry.personId);
+    } else {
+      buildEditCustomRowsV2(editingEntry.personId);
+      const raw = parseFloat(document.getElementById('editEntryAmount').value);
+      const converted = raw * getEditEffectiveRate();
+      if (!isNaN(converted) && converted > 0) {
+        const owingPeople = g.people.filter(p => editSelectedOwers.has(p.id));
+        const totalPeople = owingPeople.length + 1;
+        const share = (converted / totalPeople).toFixed(2);
+        const inp = document.getElementById(`editrow_${editingEntry.personId}`);
+        if (inp) { inp.value = share; onEditCustomRowInput(editingEntry.personId, editingEntry.personId); }
+      }
     }
-  }
-
-  function onEditCustomInput(editedId, creditorId) {
-    editCustomEdited.add(editedId);
-    const g = activeGroup(); if (!g) return;
-    const total = parseFloat(document.getElementById('editEntryAmount').value);
-    if (isNaN(total) || total <= 0) return;
-
-    const allPeople = [g.people.find(p=>p.id===creditorId), ...g.people.filter(p=>p.id!==creditorId)];
-    const editedSum = allPeople
-      .filter(p => editCustomEdited.has(p.id))
-      .reduce((s,p) => { const v=parseFloat(document.getElementById(`editcustom_${p.id}`)?.value||'0'); return s+(isNaN(v)?0:v); }, 0);
-
-    const unedited = allPeople.filter(p => !editCustomEdited.has(p.id));
-    const remainder = Math.max(0, total - editedSum);
-
-    if (unedited.length === 1) {
-      const inp = document.getElementById(`editcustom_${unedited[0].id}`);
-      if (inp) inp.value = remainder.toFixed(2);
-    } else if (unedited.length > 1) {
-      const share = remainder / unedited.length;
-      unedited.forEach(p => { const inp=document.getElementById(`editcustom_${p.id}`); if(inp) inp.value=share.toFixed(2); });
-    }
-
-    updateEditPreview(creditorId, total);
-  }
-
-  function updateEditPreview(creditorId, total) {
-    const g = activeGroup(); if (!g) return;
-    const allPeople = [g.people.find(p=>p.id===creditorId), ...g.people.filter(p=>p.id!==creditorId)];
-    const sum = allPeople.reduce((s,p) => { const v=parseFloat(document.getElementById(`editcustom_${p.id}`)?.value||'0'); return s+(isNaN(v)?0:v); }, 0);
-    const diff = total - sum;
-    const el = document.getElementById('editSplitPreview');
-    if (Math.abs(diff) < 0.01) { el.textContent='✓ Adds up correctly'; el.style.color='var(--accent)'; }
-    else { el.textContent=`£${Math.abs(diff).toFixed(2)} ${diff>0?'unallocated':'over by'}`; el.style.color='var(--accent2)'; }
   }
 
   function closeEditEntry() { document.getElementById('editEntryModal').classList.remove('open'); editingEntry=null; }
@@ -1540,35 +1827,43 @@
     if (!editingEntry) return;
     const date = document.getElementById('editEntryDate').value;
     const desc = document.getElementById('editEntryDesc').value.trim();
-    const total = parseFloat(document.getElementById('editEntryAmount').value);
+    const rawAmount = parseFloat(document.getElementById('editEntryAmount').value);
+    const editCur = editSelectedCurrencyCode || getBaseCurrency();
+    const total = parseFloat((rawAmount * getEditEffectiveRate()).toFixed(2));
     if (!desc) { alert('Enter a description.'); return; }
     if (isNaN(total)||total<=0) { alert('Enter a valid amount.'); return; }
     const g = activeGroup(); if (!g) return;
     const person = g.people.find(p=>p.id===editingEntry.personId); if (!person) return;
 
-    if (g.people.length < 3) {
-      // Simple edit — single entry
-      const entry = person.entries.find(e=>e.id===editingEntry.entryIds[0]); if (!entry) return;
-      entry.date=date; entry.desc=desc; entry.amount=total; entry.debtorId=editSelectedDebtorId;
+    // Find old groupId before removing
+    const oldGroupId = person.entries.find(e=>editingEntry.entryIds.includes(e.id))?.groupId;
+    // Remove all old debtor entries in this bill
+    person.entries = person.entries.filter(e => !editingEntry.entryIds.includes(e.id));
+    // Remove matching ownShare entry by groupId
+    if (oldGroupId) person.entries = person.entries.filter(e => !(e.ownShare && e.groupId === oldGroupId));
+
+    const owingPeople = g.people.filter(p => editSelectedOwers.has(p.id));
+    const gid = uid();
+
+    if (owingPeople.length === 0) {
+      // No one selected — just log own spend
+      person.entries.push({ id:uid(), date, desc, amount:total, debtorId:null, ownShare:true, origAmount:rawAmount, origCurrency:editCur });
+    } else if (editSplitMode === 'equal') {
+      const totalPeople = owingPeople.length + 1;
+      const share = parseFloat((total / totalPeople).toFixed(2));
+      person.entries.push({ id:uid(), date, desc, amount:share, debtorId:null, ownShare:true, groupId:gid, origAmount:rawAmount, origCurrency:editCur });
+      owingPeople.forEach(other => {
+        person.entries.push({ id:uid(), date, desc, amount:share, debtorId:other.id, groupId:gid, origAmount:rawAmount, origCurrency:editCur });
+      });
     } else {
-      // Find groupId from existing entries before removing
-      const oldGroupId = person.entries.find(e=>editingEntry.entryIds.includes(e.id))?.groupId;
-      // Remove all old debtor entries in this group
-      person.entries = person.entries.filter(e => !editingEntry.entryIds.includes(e.id));
-      // Remove matching ownShare entry by groupId
-      if (oldGroupId) person.entries = person.entries.filter(e => !(e.ownShare && e.groupId === oldGroupId));
-
-      const others = g.people.filter(p=>p.id!==editingEntry.personId);
-      const myShare = parseFloat(document.getElementById(`editcustom_${editingEntry.personId}`)?.value||'0');
-      const gid = uid();
-
+      const myShare = parseFloat(document.getElementById(`editrow_${editingEntry.personId}`)?.value||'0');
       if (!isNaN(myShare) && myShare > 0) {
-        person.entries.push({ id:uid(), date, desc, amount:myShare, debtorId:null, ownShare:true, groupId:gid });
+        person.entries.push({ id:uid(), date, desc, amount:myShare, debtorId:null, ownShare:true, groupId:gid, origAmount:rawAmount, origCurrency:editCur });
       }
-      others.forEach(other => {
-        const val = parseFloat(document.getElementById(`editcustom_${other.id}`)?.value||'0');
+      owingPeople.forEach(other => {
+        const val = parseFloat(document.getElementById(`editrow_${other.id}`)?.value||'0');
         if (!isNaN(val) && val > 0) {
-          person.entries.push({ id:uid(), date, desc, amount:val, debtorId:other.id, groupId:gid });
+          person.entries.push({ id:uid(), date, desc, amount:val, debtorId:other.id, groupId:gid, origAmount:rawAmount, origCurrency:editCur });
         }
       });
     }
