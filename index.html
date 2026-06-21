@@ -97,18 +97,30 @@
   .currency-dropdown.open { display:block; }
   .currency-opt {
     padding:11px 14px; font-family:'Inter',sans-serif; font-size:13px; color:var(--text);
-    cursor:pointer; transition:background 0.1s; display:flex; align-items:center; gap:10px;
+    cursor:pointer; transition:background 0.1s; display:flex; align-items:center;
+    justify-content:space-between; gap:10px;
   }
   .currency-opt:hover { background:var(--surface2); }
   .currency-opt.selected { color:var(--accent); font-weight:600; }
-  .currency-opt-code { font-weight:700; font-size:12px; width:38px; flex-shrink:0; }
-  .currency-opt-name { font-size:12px; color:var(--muted); }
+  .currency-opt-code { font-weight:700; font-size:11px; color:var(--muted); flex-shrink:0; }
+  .currency-opt-name { font-size:13px; color:var(--text); }
+  .currency-opt.selected .currency-opt-code { color:var(--accent); }
   .currency-opt.selected .currency-opt-name { color:var(--accent); }
+  .currency-group-label {
+    padding:9px 14px 5px; font-size:10px; font-weight:700; color:var(--accent);
+    text-transform:uppercase; letter-spacing:1px; background:var(--surface);
+    position:sticky; top:0;
+  }
   .currency-rate-info {
     font-size:11px; color:var(--muted); margin-top:5px; min-height:16px; display:flex;
     align-items:center; gap:6px;
   }
   .rate-manual-wrap { display:none; margin-top:8px; }
+  .rate-edit-link {
+    color:var(--accent); font-size:10px; text-decoration:underline; cursor:pointer;
+    margin-left:4px; font-weight:600;
+  }
+  .rate-edit-link:hover { opacity:0.8; }
   .form-actions { display:flex; gap:8px; }
   .btn-save { flex:1; background:var(--accent); color:#000; border:none; border-radius:10px; padding:12px; font-family:'Inter',sans-serif; font-weight:700; font-size:14px; cursor:pointer; }
   .btn-cancel { background:var(--surface2); color:var(--muted); border:1px solid var(--border); border-radius:10px; padding:12px 18px; font-family:'Inter',sans-serif; font-size:14px; cursor:pointer; }
@@ -923,34 +935,67 @@
   let formOpen = false;
   // ── CURRENCY SYSTEM ──
   const CURRENCIES = [
-    { code:'GBP', label:'GBP — British Pound' },
-    { code:'USD', label:'USD — US Dollar' },
-    { code:'EUR', label:'EUR — Euro' },
-    { code:'AED', label:'AED — UAE Dirham' },
-    { code:'AUD', label:'AUD — Australian Dollar' },
-    { code:'CAD', label:'CAD — Canadian Dollar' },
-    { code:'CHF', label:'CHF — Swiss Franc' },
-    { code:'CNY', label:'CNY — Chinese Yuan' },
-    { code:'DKK', label:'DKK — Danish Krone' },
-    { code:'HKD', label:'HKD — Hong Kong Dollar' },
-    { code:'IDR', label:'IDR — Indonesian Rupiah' },
-    { code:'INR', label:'INR — Indian Rupee' },
-    { code:'JPY', label:'JPY — Japanese Yen' },
-    { code:'KRW', label:'KRW — South Korean Won' },
-    { code:'MYR', label:'MYR — Malaysian Ringgit' },
-    { code:'MVR', label:'MVR — Maldivian Rufiyaa' },
-    { code:'NOK', label:'NOK — Norwegian Krone' },
-    { code:'NZD', label:'NZD — New Zealand Dollar' },
-    { code:'PHP', label:'PHP — Philippine Peso' },
-    { code:'PKR', label:'PKR — Pakistani Rupee' },
-    { code:'SAR', label:'SAR — Saudi Riyal' },
-    { code:'SEK', label:'SEK — Swedish Krona' },
-    { code:'SGD', label:'SGD — Singapore Dollar' },
-    { code:'THB', label:'THB — Thai Baht' },
-    { code:'TRY', label:'TRY — Turkish Lira' },
-    { code:'ZAR', label:'ZAR — South African Rand' },
+    // Europe
+    { code:'GBP', label:'GBP — British Pound', continent:'Europe' },
+    { code:'EUR', label:'EUR — Euro', continent:'Europe' },
+    { code:'CHF', label:'CHF — Swiss Franc', continent:'Europe' },
+    { code:'BGN', label:'BGN — Bulgarian Lev', continent:'Europe' },
+    { code:'CZK', label:'CZK — Czech Koruna', continent:'Europe' },
+    { code:'DKK', label:'DKK — Danish Krone', continent:'Europe' },
+    { code:'HUF', label:'HUF — Hungarian Forint', continent:'Europe' },
+    { code:'ISK', label:'ISK — Icelandic Krona', continent:'Europe' },
+    { code:'NOK', label:'NOK — Norwegian Krone', continent:'Europe' },
+    { code:'PLN', label:'PLN — Polish Zloty', continent:'Europe' },
+    { code:'RON', label:'RON — Romanian Leu', continent:'Europe' },
+    { code:'SEK', label:'SEK — Swedish Krona', continent:'Europe' },
+    { code:'TRY', label:'TRY — Turkish Lira', continent:'Europe' },
+
+    // Americas
+    { code:'USD', label:'USD — US Dollar', continent:'Americas' },
+    { code:'CAD', label:'CAD — Canadian Dollar', continent:'Americas' },
+    { code:'BRL', label:'BRL — Brazilian Real', continent:'Americas' },
+    { code:'MXN', label:'MXN — Mexican Peso', continent:'Americas' },
+
+    // Asia
+    { code:'INR', label:'INR — Indian Rupee', continent:'Asia' },
+    { code:'CNY', label:'CNY — Chinese Yuan', continent:'Asia' },
+    { code:'JPY', label:'JPY — Japanese Yen', continent:'Asia' },
+    { code:'KRW', label:'KRW — South Korean Won', continent:'Asia' },
+    { code:'HKD', label:'HKD — Hong Kong Dollar', continent:'Asia' },
+    { code:'SGD', label:'SGD — Singapore Dollar', continent:'Asia' },
+    { code:'MYR', label:'MYR — Malaysian Ringgit', continent:'Asia' },
+    { code:'IDR', label:'IDR — Indonesian Rupiah', continent:'Asia' },
+    { code:'THB', label:'THB — Thai Baht', continent:'Asia' },
+    { code:'PHP', label:'PHP — Philippine Peso', continent:'Asia' },
+    { code:'PKR', label:'PKR — Pakistani Rupee', continent:'Asia' },
+    { code:'BDT', label:'BDT — Bangladeshi Taka', continent:'Asia' },
+    { code:'LKR', label:'LKR — Sri Lankan Rupee', continent:'Asia' },
+    { code:'NPR', label:'NPR — Nepalese Rupee', continent:'Asia' },
+    { code:'MVR', label:'MVR — Maldivian Rufiyaa', continent:'Asia' },
+    { code:'VND', label:'VND — Vietnamese Dong', continent:'Asia' },
+    { code:'KHR', label:'KHR — Cambodian Riel', continent:'Asia' },
+    { code:'LAK', label:'LAK — Lao Kip', continent:'Asia' },
+    { code:'MMK', label:'MMK — Myanmar Kyat', continent:'Asia' },
+    { code:'BND', label:'BND — Brunei Dollar', continent:'Asia' },
+    { code:'TWD', label:'TWD — Taiwan Dollar', continent:'Asia' },
+    { code:'MNT', label:'MNT — Mongolian Tugrik', continent:'Asia' },
+    { code:'KZT', label:'KZT — Kazakhstani Tenge', continent:'Asia' },
+    { code:'UZS', label:'UZS — Uzbekistani Som', continent:'Asia' },
+    { code:'ILS', label:'ILS — Israeli New Shekel', continent:'Asia' },
+
+    // Middle East
+    { code:'AED', label:'AED — UAE Dirham', continent:'Middle East' },
+    { code:'SAR', label:'SAR — Saudi Riyal', continent:'Middle East' },
+
+    // Oceania
+    { code:'AUD', label:'AUD — Australian Dollar', continent:'Oceania' },
+    { code:'NZD', label:'NZD — New Zealand Dollar', continent:'Oceania' },
+
+    // Africa
+    { code:'ZAR', label:'ZAR — South African Rand', continent:'Africa' },
   ];
-  const CURRENCY_SYMBOLS = { GBP:'£',USD:'$',EUR:'€',AED:'د.إ',AUD:'A$',CAD:'C$',CHF:'Fr',CNY:'¥',DKK:'kr',HKD:'HK$',IDR:'Rp',INR:'₹',JPY:'¥',KRW:'₩',MYR:'RM',MVR:'Rf',NOK:'kr',NZD:'NZ$',PHP:'₱',PKR:'₨',SAR:'﷼',SEK:'kr',SGD:'S$',THB:'฿',TRY:'₺',ZAR:'R' };
+  const CURRENCY_SYMBOLS = { GBP:'£',USD:'$',EUR:'€',AED:'د.إ',AUD:'A$',BDT:'৳',BGN:'лв',BND:'B$',BRL:'R$',CAD:'C$',CHF:'Fr',CNY:'¥',CZK:'Kč',DKK:'kr',HKD:'HK$',HUF:'Ft',IDR:'Rp',ILS:'₪',INR:'₹',ISK:'kr',JPY:'¥',KHR:'៛',KRW:'₩',KZT:'₸',LAK:'₭',LKR:'Rs',MMK:'K',MNT:'₮',MXN:'Mex$',MYR:'RM',MVR:'Rf',NPR:'Rs',NOK:'kr',NZD:'NZ$',PHP:'₱',PKR:'₨',PLN:'zł',RON:'lei',SAR:'﷼',SEK:'kr',SGD:'S$',THB:'฿',TRY:'₺',TWD:'NT$',UZS:'soʻm',VND:'₫',ZAR:'R' };
+  const CONTINENT_ORDER = ['Europe', 'Americas', 'Asia', 'Middle East', 'Oceania', 'Africa'];
 
   // Cache: { 'USD-GBP-2026-06-17': 0.79, ... }
   function getCacheKey(from, to) {
@@ -998,10 +1043,11 @@
   function buildDropdownList() {
     const dropdown = document.getElementById('currencyDropdown');
     if (!dropdown) return;
-    dropdown.innerHTML = CURRENCIES.map(c =>
+    const sorted = [...CURRENCIES].sort((a,b) => a.label.split(' — ')[1].localeCompare(b.label.split(' — ')[1]));
+    dropdown.innerHTML = sorted.map(c =>
       `<div class="currency-opt ${c.code===selectedCurrencyCode?'selected':''}" onclick="selectCurrency('${c.code}')">
-        <span class="currency-opt-code">${c.code}</span>
         <span class="currency-opt-name">${c.label.split(' — ')[1]}</span>
+        <span class="currency-opt-code">${c.code}</span>
       </div>`
     ).join('');
   }
@@ -1070,16 +1116,32 @@
     onAmountInput();
   }
 
+  function showRateWithEditLink(from, to, rate, tag) {
+    const infoEl = document.getElementById('rateInfo');
+    infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${rate.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(${tag})</span><span class="rate-edit-link" onclick="enableManualRateOverride('${from}','${to}',${rate})">Edit</span>`;
+  }
+
+  function enableManualRateOverride(from, to, currentVal) {
+    const manualWrap = document.getElementById('rateManualWrap');
+    const lbl = document.getElementById('manualRateLabel');
+    if (lbl) lbl.textContent = `How much is 1 ${from} in ${to}?`;
+    manualWrap.style.display = '';
+    const inp = document.getElementById('manualRate');
+    inp.value = currentVal.toFixed(4);
+    onManualRateInput();
+    setTimeout(() => { inp.focus(); inp.select(); }, 50);
+  }
+
   async function fetchRate(from, to) {
     const infoEl = document.getElementById('rateInfo');
     const manualWrap = document.getElementById('rateManualWrap');
+    manualWrap.style.display = 'none';
 
     // Check cache first
     const cached = getCachedRate(from, to);
     if (cached) {
       currentRate = cached;
-      infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${cached.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(today's rate)</span>`;
-      manualWrap.style.display = 'none';
+      showRateWithEditLink(from, to, cached, "today's rate");
       return;
     }
 
@@ -1109,10 +1171,9 @@
     if (rate) {
       currentRate = rate;
       setCachedRate(from, to, rate);
-      infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${rate.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(live)</span>`;
-      manualWrap.style.display = 'none';
+      showRateWithEditLink(from, to, rate, 'live');
     } else {
-      // Both APIs failed — show manual input
+      // Both APIs failed — show manual input directly
       currentRate = 1;
       infoEl.innerHTML = `<span style="color:var(--accent2);font-size:11px">⚠ No internet? Enter the rate below</span>`;
       manualWrap.style.display = '';
@@ -1463,10 +1524,11 @@
   function buildEditDropdownList() {
     const dropdown = document.getElementById('editCurrencyDropdown');
     if (!dropdown) return;
-    dropdown.innerHTML = CURRENCIES.map(c =>
+    const sorted = [...CURRENCIES].sort((a,b) => a.label.split(' — ')[1].localeCompare(b.label.split(' — ')[1]));
+    dropdown.innerHTML = sorted.map(c =>
       `<div class="currency-opt ${c.code===editSelectedCurrencyCode?'selected':''}" onclick="selectEditCurrency('${c.code}')">
-        <span class="currency-opt-code">${c.code}</span>
         <span class="currency-opt-name">${c.label.split(' — ')[1]}</span>
+        <span class="currency-opt-code">${c.code}</span>
       </div>`
     ).join('');
   }
@@ -1518,15 +1580,31 @@
     await fetchEditRate(from, to);
   }
 
+  function showEditRateWithLink(from, to, rate, tag) {
+    const infoEl = document.getElementById('editRateInfo');
+    infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${rate.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(${tag})</span><span class="rate-edit-link" onclick="enableEditManualRateOverride('${from}','${to}',${rate})">Edit</span>`;
+  }
+
+  function enableEditManualRateOverride(from, to, currentVal) {
+    const manualWrap = document.getElementById('editRateManualWrap');
+    const lbl = document.getElementById('editManualRateLabel');
+    if (lbl) lbl.textContent = `How much is 1 ${from} in ${to}?`;
+    manualWrap.style.display = '';
+    const inp = document.getElementById('editManualRate');
+    inp.value = currentVal.toFixed(4);
+    onEditManualRateInput();
+    setTimeout(() => { inp.focus(); inp.select(); }, 50);
+  }
+
   async function fetchEditRate(from, to) {
     const infoEl = document.getElementById('editRateInfo');
     const manualWrap = document.getElementById('editRateManualWrap');
+    manualWrap.style.display = 'none';
 
     const cached = getCachedRate(from, to);
     if (cached) {
       editCurrentRate = cached;
-      infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${cached.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(today's rate)</span>`;
-      manualWrap.style.display = 'none';
+      showEditRateWithLink(from, to, cached, "today's rate");
       return;
     }
 
@@ -1546,8 +1624,7 @@
     if (rate) {
       editCurrentRate = rate;
       setCachedRate(from, to, rate);
-      infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${rate.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(live)</span>`;
-      manualWrap.style.display = 'none';
+      showEditRateWithLink(from, to, rate, 'live');
     } else {
       editCurrentRate = 1;
       infoEl.innerHTML = `<span style="color:var(--accent2);font-size:11px">⚠ No internet? Enter the rate below</span>`;
@@ -1954,10 +2031,14 @@
     const el = document.getElementById('settingsCurrentGroup');
     if (!g) { el.innerHTML=`<div class="settings-row"><div class="settings-row-left"><div class="settings-row-title">No active group</div><div class="settings-row-desc">Go to Groups and select one.</div></div></div>`; return; }
     el.innerHTML=`<div class="settings-row"><div class="settings-row-left"><div class="settings-row-title">${g.emoji||'👥'} ${escHtml(g.name)}</div><div class="settings-row-desc">${g.people.length} people · ${g.people.reduce((s,p)=>s+(p.entries||[]).filter(e=>!e.ownShare).length,0)} entries</div></div></div>`;
-    // Build base currency select
+    // Build base currency select — alphabetical by name
     const sel = document.getElementById('baseCurrencySelect');
     if (sel) {
-      sel.innerHTML = CURRENCIES.map(c => `<option value="${c.code}" ${c.code===(g.baseCurrency||'GBP')?'selected':''}>${c.label}</option>`).join('');
+      const sorted = [...CURRENCIES].sort((a,b) => a.label.split(' — ')[1].localeCompare(b.label.split(' — ')[1]));
+      sel.innerHTML = sorted.map(c => {
+        const name = c.label.split(' — ')[1];
+        return `<option value="${c.code}" ${c.code===(g.baseCurrency||'GBP')?'selected':''}>${name} — ${c.code}</option>`;
+      }).join('');
     }
   }
   function saveBaseCurrency() {
