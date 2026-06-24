@@ -501,10 +501,10 @@
           <div class="settings-row-title">Base currency</div>
           <div class="settings-row-desc">All amounts are stored and shown in this currency.</div>
         </div>
-        <select id="baseCurrencySelect" onchange="saveBaseCurrency()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none;cursor:pointer;width:auto;min-width:80px">
-        </select>
+        <button type="button" class="currency-btn" id="baseCurrencyBtn" onclick="toggleBaseCurrencyDropdown()" style="width:72px">GBP</button>
       </div>
     </div>
+    <div class="currency-dropdown" id="baseCurrencyDropdown"></div>
 
     <div class="settings-group-label">Data</div>
     <div class="settings-card">
@@ -1017,6 +1017,26 @@
     } catch(e) {}
   }
 
+  // Standalone rate fetcher with cache — no UI side effects, returns null on failure
+  async function fetchRateRaw(from, to) {
+    if (!from || !to || from === to) return 1;
+    const cached = getCachedRate(from, to);
+    if (cached) return cached;
+    let rate = null;
+    try {
+      const res = await fetch(`https://api.frankfurter.app/latest?from=${from}&to=${to}`);
+      if (res.ok) { const data = await res.json(); rate = data.rates?.[to]; }
+    } catch(e) {}
+    if (!rate) {
+      try {
+        const res2 = await fetch(`https://open.er-api.com/v6/latest/${from}`);
+        if (res2.ok) { const data2 = await res2.json(); rate = data2.rates?.[to]; }
+      } catch(e) {}
+    }
+    if (rate) setCachedRate(from, to, rate);
+    return rate;
+  }
+
   let currentRate = 1; // rate from entryCurrency to baseCurrency
   let rateLoading = false;
 
@@ -1118,7 +1138,19 @@
 
   function showRateWithEditLink(from, to, rate, tag) {
     const infoEl = document.getElementById('rateInfo');
-    infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${rate.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(${tag})</span><span class="rate-edit-link" onclick="enableManualRateOverride('${from}','${to}',${rate})">Edit</span>`;
+    infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${rate.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(${tag})</span><span class="rate-edit-link" id="rateEditLinkBtn">Edit</span>`;
+    const linkBtn = document.getElementById('rateEditLinkBtn');
+    if (linkBtn) {
+      linkBtn.dataset.from = from;
+      linkBtn.dataset.to = to;
+      linkBtn.dataset.rate = rate;
+      linkBtn.addEventListener('click', handleRateEditClick);
+    }
+  }
+
+  function handleRateEditClick(e) {
+    const btn = e.currentTarget;
+    enableManualRateOverride(btn.dataset.from, btn.dataset.to, parseFloat(btn.dataset.rate));
   }
 
   function enableManualRateOverride(from, to, currentVal) {
@@ -1409,32 +1441,32 @@
 
     if (g.people.length < 2) {
       // Solo entry — full amount is their own spend
-      creditor.entries.push({ id:uid(), date, desc, amount:totalAmount, debtorId:null, ownShare:true });
+      creditor.entries.push({ id:uid(), date, desc, amount:totalAmount, debtorId:null, ownShare:true, origAmount:originalAmount, origCurrency:originalCurrency });
     } else if (splitMode === 'equal') {
       const owingPeople = g.people.filter(p => selectedOwers.has(p.id));
       const totalPeople = owingPeople.length + 1; // +1 for creditor
       const share = parseFloat((totalAmount / totalPeople).toFixed(2));
       const gid = uid();
       if (owingPeople.length > 0) {
-        creditor.entries.push({ id:uid(), date, desc, amount:share, debtorId:null, ownShare:true, groupId:gid });
+        creditor.entries.push({ id:uid(), date, desc, amount:share, debtorId:null, ownShare:true, groupId:gid, origAmount:originalAmount, origCurrency:originalCurrency });
         owingPeople.forEach(other => {
-          creditor.entries.push({ id:uid(), date, desc, amount:share, debtorId:other.id, groupId:gid });
+          creditor.entries.push({ id:uid(), date, desc, amount:share, debtorId:other.id, groupId:gid, origAmount:originalAmount, origCurrency:originalCurrency });
         });
       } else {
         // No one selected — just log own entry
-        creditor.entries.push({ id:uid(), date, desc, amount:totalAmount, debtorId:null, ownShare:true });
+        creditor.entries.push({ id:uid(), date, desc, amount:totalAmount, debtorId:null, ownShare:true, origAmount:originalAmount, origCurrency:originalCurrency });
       }
     } else {
       const owingPeople = g.people.filter(p => selectedOwers.has(p.id));
       const gid = uid();
       const myShare = parseFloat(document.getElementById(`custom_${creditor.id}`)?.value || '0');
       if (!isNaN(myShare) && myShare > 0) {
-        creditor.entries.push({ id:uid(), date, desc, amount:myShare, debtorId:null, ownShare:true, groupId:gid });
+        creditor.entries.push({ id:uid(), date, desc, amount:myShare, debtorId:null, ownShare:true, groupId:gid, origAmount:originalAmount, origCurrency:originalCurrency });
       }
       owingPeople.forEach(other => {
         const val = parseFloat(document.getElementById(`custom_${other.id}`)?.value || '0');
         if (!isNaN(val) && val > 0) {
-          creditor.entries.push({ id:uid(), date, desc, amount:val, debtorId:other.id, groupId:gid });
+          creditor.entries.push({ id:uid(), date, desc, amount:val, debtorId:other.id, groupId:gid, origAmount:originalAmount, origCurrency:originalCurrency });
         }
       });
     }
@@ -1582,7 +1614,19 @@
 
   function showEditRateWithLink(from, to, rate, tag) {
     const infoEl = document.getElementById('editRateInfo');
-    infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${rate.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(${tag})</span><span class="rate-edit-link" onclick="enableEditManualRateOverride('${from}','${to}',${rate})">Edit</span>`;
+    infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${rate.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(${tag})</span><span class="rate-edit-link" id="editRateEditLinkBtn">Edit</span>`;
+    const linkBtn = document.getElementById('editRateEditLinkBtn');
+    if (linkBtn) {
+      linkBtn.dataset.from = from;
+      linkBtn.dataset.to = to;
+      linkBtn.dataset.rate = rate;
+      linkBtn.addEventListener('click', handleEditRateEditClick);
+    }
+  }
+
+  function handleEditRateEditClick(e) {
+    const btn = e.currentTarget;
+    enableEditManualRateOverride(btn.dataset.from, btn.dataset.to, parseFloat(btn.dataset.rate));
   }
 
   function enableEditManualRateOverride(from, to, currentVal) {
@@ -1788,9 +1832,24 @@
     document.getElementById('editEntryDate').value = first.date||'';
     document.getElementById('editEntryDesc').value = first.desc||'';
 
-    const groupTotal = entries.reduce((s,e) => s+parseFloat(e.amount), 0);
+    // Reconstruct the TRUE total bill amount — sum all entries sharing this bill's groupId
+    // (debtor entries passed in via idsStr, PLUS the hidden ownShare entry)
+    let groupTotal;
+    if (first.groupId) {
+      groupTotal = person.entries
+        .filter(e => e.groupId === first.groupId)
+        .reduce((s,e) => s+parseFloat(e.amount), 0);
+    } else {
+      // No groupId (legacy/2-person without split groupId) — entries passed in are the full picture
+      groupTotal = entries.reduce((s,e) => s+parseFloat(e.amount), 0);
+      // If there's an ownShare entry for this exact bill (same desc/date, no groupId), include it
+      const looseOwnShare = person.entries.find(e => e.ownShare && !e.groupId && e.desc===first.desc && e.date===first.date);
+      if (looseOwnShare && !entries.includes(looseOwnShare)) {
+        groupTotal += parseFloat(looseOwnShare.amount);
+      }
+    }
 
-    // Restore original currency/amount if present, else show base amount
+    // Restore original currency/amount if present, else use reconstructed total
     const origCur = first.origCurrency || getBaseCurrency();
     const origAmt = first.origAmount || groupTotal;
     document.getElementById('editEntryAmount').value = origAmt;
@@ -2031,21 +2090,137 @@
     const el = document.getElementById('settingsCurrentGroup');
     if (!g) { el.innerHTML=`<div class="settings-row"><div class="settings-row-left"><div class="settings-row-title">No active group</div><div class="settings-row-desc">Go to Groups and select one.</div></div></div>`; return; }
     el.innerHTML=`<div class="settings-row"><div class="settings-row-left"><div class="settings-row-title">${g.emoji||'👥'} ${escHtml(g.name)}</div><div class="settings-row-desc">${g.people.length} people · ${g.people.reduce((s,p)=>s+(p.entries||[]).filter(e=>!e.ownShare).length,0)} entries</div></div></div>`;
-    // Build base currency select — alphabetical by name
-    const sel = document.getElementById('baseCurrencySelect');
-    if (sel) {
-      const sorted = [...CURRENCIES].sort((a,b) => a.label.split(' — ')[1].localeCompare(b.label.split(' — ')[1]));
-      sel.innerHTML = sorted.map(c => {
-        const name = c.label.split(' — ')[1];
-        return `<option value="${c.code}" ${c.code===(g.baseCurrency||'GBP')?'selected':''}>${name} — ${c.code}</option>`;
-      }).join('');
-    }
+    const btn = document.getElementById('baseCurrencyBtn');
+    if (btn) btn.textContent = g.baseCurrency || 'GBP';
   }
-  function saveBaseCurrency() {
+
+  function buildBaseCurrencyDropdownList() {
     const g = activeGroup(); if (!g) return;
-    g.baseCurrency = document.getElementById('baseCurrencySelect').value;
-    save();
+    const dropdown = document.getElementById('baseCurrencyDropdown');
+    if (!dropdown) return;
+    const current = g.baseCurrency || 'GBP';
+    const sorted = [...CURRENCIES].sort((a,b) => a.label.split(' — ')[1].localeCompare(b.label.split(' — ')[1]));
+    dropdown.innerHTML = sorted.map(c =>
+      `<div class="currency-opt ${c.code===current?'selected':''}" onclick="selectBaseCurrency('${c.code}')">
+        <span class="currency-opt-name">${c.label.split(' — ')[1]}</span>
+        <span class="currency-opt-code">${c.code}</span>
+      </div>`
+    ).join('');
   }
+
+  function toggleBaseCurrencyDropdown() {
+    const btn = document.getElementById('baseCurrencyBtn');
+    const dropdown = document.getElementById('baseCurrencyDropdown');
+    if (!dropdown) return;
+    const isOpen = dropdown.classList.contains('open');
+    if (isOpen) { closeBaseCurrencyDropdown(); return; }
+    const rect = btn.getBoundingClientRect();
+    dropdown.style.top = (rect.bottom + 4) + 'px';
+    dropdown.style.right = (window.innerWidth - rect.right) + 'px';
+    dropdown.style.left = 'auto';
+    dropdown.classList.add('open');
+    btn.classList.add('open');
+    buildBaseCurrencyDropdownList();
+    setTimeout(() => {
+      const sel = dropdown.querySelector('.selected');
+      if (sel) sel.scrollIntoView({ block:'nearest' });
+    }, 50);
+  }
+
+  function closeBaseCurrencyDropdown() {
+    document.getElementById('baseCurrencyDropdown')?.classList.remove('open');
+    document.getElementById('baseCurrencyBtn')?.classList.remove('open');
+  }
+
+  let currencySwitchInProgress = false;
+
+  async function selectBaseCurrency(code) {
+    if (currencySwitchInProgress) return;
+    const g = activeGroup(); if (!g) return;
+    const oldBase = g.baseCurrency || 'GBP';
+    if (code === oldBase) { closeBaseCurrencyDropdown(); return; }
+
+    closeBaseCurrencyDropdown();
+
+    const totalEntries = g.people.reduce((s,p) => s + (p.entries||[]).length, 0);
+    if (totalEntries === 0) {
+      // No entries yet — just switch, nothing to recalculate
+      g.baseCurrency = code;
+      const btn = document.getElementById('baseCurrencyBtn');
+      if (btn) btn.textContent = code;
+      save();
+      return;
+    }
+
+    showConfirm(
+      `Switch to ${code}?`,
+      `${totalEntries} existing entr${totalEntries===1?'y':'ies'} will be recalculated using each entry's original currency and today's rate.`,
+      () => recalculateGroupCurrency(g, code)
+    );
+  }
+
+  async function recalculateGroupCurrency(g, newBase) {
+    if (currencySwitchInProgress) return;
+    currencySwitchInProgress = true;
+
+    const btn = document.getElementById('baseCurrencyBtn');
+    if (btn) { btn.textContent = '…'; btn.style.opacity = '0.5'; btn.style.pointerEvents = 'none'; }
+
+    const rateCache = {};
+    const oldBase = g.baseCurrency || 'GBP';
+    const failedCurrencies = new Set();
+
+    for (const person of g.people) {
+      for (const entry of (person.entries || [])) {
+        const fromCur = entry.origCurrency || oldBase;
+        const fromAmt = (entry.origAmount !== undefined && entry.origAmount !== null)
+          ? parseFloat(entry.origAmount)
+          : parseFloat(entry.amount);
+
+        if (fromCur === newBase) {
+          entry.amount = parseFloat(fromAmt.toFixed(2));
+          continue;
+        }
+
+        let rate = rateCache[fromCur];
+        if (rate === undefined) {
+          rate = await fetchRateRaw(fromCur, newBase);
+          rateCache[fromCur] = rate;
+        }
+
+        if (rate) {
+          entry.amount = parseFloat((fromAmt * rate).toFixed(2));
+        } else {
+          // Could not fetch a rate — leave this entry's amount untouched and flag it
+          failedCurrencies.add(fromCur);
+        }
+      }
+    }
+
+    if (btn) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+    currencySwitchInProgress = false;
+
+    if (failedCurrencies.size > 0) {
+      // Don't switch the base currency if any conversion failed — data would be inconsistent
+      if (btn) btn.textContent = oldBase;
+      alert(`Couldn't fetch a rate for: ${[...failedCurrencies].join(', ')}. No internet? Base currency was not changed — try again when you're back online.`);
+      return;
+    }
+
+    g.baseCurrency = newBase;
+    if (btn) btn.textContent = newBase;
+    save();
+    renderPeople();
+    renderSettings();
+  }
+
+  document.addEventListener('click', e => {
+    const btn = document.getElementById('baseCurrencyBtn');
+    const dd = document.getElementById('baseCurrencyDropdown');
+    if (dd && dd.classList.contains('open') && !btn?.contains(e.target) && !dd.contains(e.target)) {
+      closeBaseCurrencyDropdown();
+    }
+  });
 
   let pendingConfirmFn = null;
   function showConfirm(title, text, fn) {
