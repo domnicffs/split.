@@ -77,7 +77,14 @@
   @keyframes slideDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
   .form-group { display:flex; flex-direction:column; gap:6px; }
   .form-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
-  .form-input { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-family:'Inter',sans-serif; font-size:14px; color:var(--text); outline:none; transition:border-color 0.2s; width:100%; }
+  .form-input { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-family:'Inter',sans-serif; font-size:14px; color:var(--text); outline:none; transition:border-color 0.2s; width:100%; box-sizing:border-box; max-width:100%; }
+  input[type="date"].form-input {
+    -webkit-appearance:none; appearance:none;
+    color-scheme:dark;
+  }
+  input[type="date"].form-input::-webkit-date-and-time-value {
+    text-align:left;
+  }
   .form-input:focus { border-color:var(--accent); }
   .form-input::placeholder { color:var(--muted); }
   .currency-row { display:flex; gap:8px; align-items:stretch; position:relative; }
@@ -118,9 +125,23 @@
   .rate-manual-wrap { display:none; margin-top:8px; }
   .rate-edit-link {
     color:var(--accent); font-size:10px; text-decoration:underline; cursor:pointer;
-    margin-left:4px; font-weight:600;
+    margin-left:4px; font-weight:600; position:relative; z-index:5;
+    padding:4px 6px; margin:-4px -6px -4px 0; display:inline-block;
   }
-  .rate-edit-link:hover { opacity:0.8; }
+  .rate-edit-link:hover, .rate-edit-link:active { opacity:0.7; }
+  .desc-suggestions {
+    display:none; position:absolute; top:100%; left:0; right:0; z-index:50;
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    margin-top:4px; max-height:160px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  }
+  .desc-suggestions.open { display:block; }
+  .desc-suggestion-item {
+    padding:10px 14px; font-family:'Inter',sans-serif; font-size:13px; color:var(--text);
+    cursor:pointer; transition:background 0.1s; border-bottom:1px solid var(--border);
+  }
+  .desc-suggestion-item:last-child { border-bottom:none; }
+  .desc-suggestion-item:hover, .desc-suggestion-item:active { background:var(--surface2); }
+  .desc-suggestion-item .match { color:var(--accent); font-weight:700; }
   .form-actions { display:flex; gap:8px; }
   .btn-save { flex:1; background:var(--accent); color:#000; border:none; border-radius:10px; padding:12px; font-family:'Inter',sans-serif; font-weight:700; font-size:14px; cursor:pointer; }
   .btn-cancel { background:var(--surface2); color:var(--muted); border:1px solid var(--border); border-radius:10px; padding:12px 18px; font-family:'Inter',sans-serif; font-size:14px; cursor:pointer; }
@@ -424,9 +445,10 @@
       <div class="form-label">Date</div>
       <input type="date" class="form-input" id="entryDate" />
     </div>
-    <div class="form-group">
+    <div class="form-group" style="position:relative">
       <div class="form-label">Description</div>
-      <input type="text" class="form-input" id="entryDesc" placeholder="e.g. KFC, Noodles…" />
+      <input type="text" class="form-input" id="entryDesc" placeholder="" autocomplete="off" oninput="onDescInput()" onfocus="showDescSuggestions()" />
+      <div class="desc-suggestions" id="descSuggestions"></div>
     </div>
     <div class="form-group">
       <div class="form-label" id="amountLabel">Total amount</div>
@@ -1141,16 +1163,8 @@
     infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${rate.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(${tag})</span><span class="rate-edit-link" id="rateEditLinkBtn">Edit</span>`;
     const linkBtn = document.getElementById('rateEditLinkBtn');
     if (linkBtn) {
-      linkBtn.dataset.from = from;
-      linkBtn.dataset.to = to;
-      linkBtn.dataset.rate = rate;
-      linkBtn.addEventListener('click', handleRateEditClick);
+      linkBtn.onclick = function() { enableManualRateOverride(from, to, rate); };
     }
-  }
-
-  function handleRateEditClick(e) {
-    const btn = e.currentTarget;
-    enableManualRateOverride(btn.dataset.from, btn.dataset.to, parseFloat(btn.dataset.rate));
   }
 
   function enableManualRateOverride(from, to, currentVal) {
@@ -1265,6 +1279,57 @@
     onAmountInput();
   }
 
+  // ═══ DESCRIPTION SUGGESTIONS ═══
+  function getGroupDescriptions(g) {
+    if (!g) return [];
+    const set = new Set();
+    g.people.forEach(p => (p.entries||[]).forEach(e => {
+      if (e.desc && !e.ownShare) set.add(e.desc);
+      else if (e.desc && e.ownShare) set.add(e.desc); // include ownShare too so equal-split bills still suggest
+    }));
+    return [...set];
+  }
+
+  function showDescSuggestions() {
+    const g = activeGroup();
+    const input = document.getElementById('entryDesc');
+    const wrap = document.getElementById('descSuggestions');
+    if (!g || !input || !wrap) return;
+    const query = input.value.trim().toLowerCase();
+    const all = getGroupDescriptions(g);
+    const matches = query
+      ? all.filter(d => d.toLowerCase().includes(query))
+      : all;
+    if (matches.length === 0) { wrap.classList.remove('open'); wrap.innerHTML=''; return; }
+    wrap.innerHTML = matches.slice(0, 8).map(d => {
+      const idx = d.toLowerCase().indexOf(query);
+      let display = escHtml(d);
+      if (query && idx !== -1) {
+        display = escHtml(d.slice(0,idx)) + '<span class="match">' + escHtml(d.slice(idx,idx+query.length)) + '</span>' + escHtml(d.slice(idx+query.length));
+      }
+      return `<div class="desc-suggestion-item" onmousedown="selectDescSuggestion('${d.replace(/'/g,"\\'")}')">${display}</div>`;
+    }).join('');
+    wrap.classList.add('open');
+  }
+
+  function onDescInput() {
+    showDescSuggestions();
+  }
+
+  function selectDescSuggestion(desc) {
+    const input = document.getElementById('entryDesc');
+    if (input) input.value = desc;
+    document.getElementById('descSuggestions').classList.remove('open');
+  }
+
+  document.addEventListener('click', e => {
+    const input = document.getElementById('entryDesc');
+    const wrap = document.getElementById('descSuggestions');
+    if (wrap && wrap.classList.contains('open') && e.target !== input && !wrap.contains(e.target)) {
+      wrap.classList.remove('open');
+    }
+  });
+
   function toggleForm() {
     formOpen = !formOpen;
     const panel = document.getElementById('formPanel');
@@ -1293,7 +1358,6 @@
         oweGroup.style.display = 'none';
         splitGroup.style.display = 'none';
       }
-      setTimeout(() => document.getElementById('entryDesc').focus(), 50);
       const btn = document.querySelector('.add-btn');
       if (btn) btn.innerHTML = '<span>✕</span> <span>Cancel</span>';
     } else { closeForm(); }
@@ -1617,16 +1681,8 @@
     infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${rate.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(${tag})</span><span class="rate-edit-link" id="editRateEditLinkBtn">Edit</span>`;
     const linkBtn = document.getElementById('editRateEditLinkBtn');
     if (linkBtn) {
-      linkBtn.dataset.from = from;
-      linkBtn.dataset.to = to;
-      linkBtn.dataset.rate = rate;
-      linkBtn.addEventListener('click', handleEditRateEditClick);
+      linkBtn.onclick = function() { enableEditManualRateOverride(from, to, rate); };
     }
-  }
-
-  function handleEditRateEditClick(e) {
-    const btn = e.currentTarget;
-    enableEditManualRateOverride(btn.dataset.from, btn.dataset.to, parseFloat(btn.dataset.rate));
   }
 
   function enableEditManualRateOverride(from, to, currentVal) {
