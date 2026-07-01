@@ -1163,19 +1163,29 @@
     infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${rate.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(${tag})</span><span class="rate-edit-link" id="rateEditLinkBtn">Edit</span>`;
     const linkBtn = document.getElementById('rateEditLinkBtn');
     if (linkBtn) {
-      linkBtn.onclick = function() { enableManualRateOverride(from, to, rate); };
+      linkBtn.onclick = function(e) {
+        e.stopPropagation();
+        enableManualRateOverride(from, to, rate);
+      };
     }
   }
 
   function enableManualRateOverride(from, to, currentVal) {
+    // Show manual override by replacing the rate info display
+    const infoEl = document.getElementById('rateInfo');
+    infoEl.innerHTML = `<span style="color:var(--muted);font-size:11px">1 ${from} = </span>`;
     const manualWrap = document.getElementById('rateManualWrap');
     const lbl = document.getElementById('manualRateLabel');
     if (lbl) lbl.textContent = `How much is 1 ${from} in ${to}?`;
-    manualWrap.style.display = '';
-    const inp = document.getElementById('manualRate');
-    inp.value = currentVal.toFixed(4);
-    onManualRateInput();
-    setTimeout(() => { inp.focus(); inp.select(); }, 50);
+    if (manualWrap) {
+      manualWrap.style.display = 'block';
+      const inp = document.getElementById('manualRate');
+      if (inp) {
+        inp.value = currentVal.toFixed(4);
+        onManualRateInput();
+        setTimeout(() => { inp.focus(); inp.select(); }, 100);
+      }
+    }
   }
 
   async function fetchRate(from, to) {
@@ -1681,19 +1691,28 @@
     infoEl.innerHTML = `<span style="color:var(--accent)">1 ${from} = ${rate.toFixed(4)} ${to}</span> <span style="color:var(--muted);font-size:10px">(${tag})</span><span class="rate-edit-link" id="editRateEditLinkBtn">Edit</span>`;
     const linkBtn = document.getElementById('editRateEditLinkBtn');
     if (linkBtn) {
-      linkBtn.onclick = function() { enableEditManualRateOverride(from, to, rate); };
+      linkBtn.onclick = function(e) {
+        e.stopPropagation();
+        enableEditManualRateOverride(from, to, rate);
+      };
     }
   }
 
   function enableEditManualRateOverride(from, to, currentVal) {
+    const infoEl = document.getElementById('editRateInfo');
+    infoEl.innerHTML = `<span style="color:var(--muted);font-size:11px">1 ${from} = </span>`;
     const manualWrap = document.getElementById('editRateManualWrap');
     const lbl = document.getElementById('editManualRateLabel');
     if (lbl) lbl.textContent = `How much is 1 ${from} in ${to}?`;
-    manualWrap.style.display = '';
-    const inp = document.getElementById('editManualRate');
-    inp.value = currentVal.toFixed(4);
-    onEditManualRateInput();
-    setTimeout(() => { inp.focus(); inp.select(); }, 50);
+    if (manualWrap) {
+      manualWrap.style.display = 'block';
+      const inp = document.getElementById('editManualRate');
+      if (inp) {
+        inp.value = currentVal.toFixed(4);
+        onEditManualRateInput();
+        setTimeout(() => { inp.focus(); inp.select(); }, 100);
+      }
+    }
   }
 
   async function fetchEditRate(from, to) {
