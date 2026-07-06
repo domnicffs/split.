@@ -171,6 +171,16 @@
   .entries-section { margin:16px 20px 0; }
   .entries-header { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:10px; }
   .entry-item { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:8px; display:flex; align-items:center; gap:12px; animation:fadeIn 0.2s ease; }
+  .entry-item.settled { opacity:0.45; }
+  .entry-item.settled .entry-desc { text-decoration:line-through; }
+  .entry-item.settled .entry-amount { text-decoration:line-through; color:var(--muted); }
+  .settle-check {
+    width:22px; height:22px; border-radius:6px; border:2px solid var(--border);
+    background:transparent; flex-shrink:0; cursor:pointer; display:flex;
+    align-items:center; justify-content:center; transition:all 0.15s;
+  }
+  .settle-check.checked { background:var(--accent); border-color:var(--accent); }
+  .settle-check.checked::after { content:'✓'; font-size:13px; font-weight:700; color:#000; }
   @keyframes fadeIn { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:translateX(0)} }
   .entry-left { flex:1; min-width:0; }
   .entry-desc { font-size:14px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:3px; }
@@ -621,7 +631,7 @@
   function activeGroup() { return state.groups.find(g => g.id === state.activeGroupId) || null; }
   function activePerson() { const g = activeGroup(); if (!g) return null; return g.people.find(p => p.id === g.activePersonId) || g.people[0] || null; }
   function fmt(n) { return '£' + parseFloat(n||0).toFixed(2); }
-  function personTotal(p) { return (p.entries||[]).filter(e=>!e.ownShare).reduce((s,e) => s+parseFloat(e.amount),0); }
+  function personTotal(p) { return (p.entries||[]).filter(e=>!e.ownShare && !e.settled).reduce((s,e) => s+parseFloat(e.amount),0); }
   function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function fmtDate(d) { if (!d) return ''; return new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}); }
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
@@ -787,7 +797,7 @@
       area.innerHTML = `<div class="summary-strip"><div class="summary-item"><div class="summary-label">${escHtml(p.name)}</div><div class="summary-val">${fmt(personTotal(p))}</div></div></div>`;
       return;
     }
-    const combined = g.people.reduce((s,p) => s+(p.entries||[]).reduce((x,e)=>x+parseFloat(e.amount),0), 0);
+    const combined = g.people.reduce((s,p) => s+(p.entries||[]).filter(e=>!e.settled).reduce((x,e)=>x+parseFloat(e.amount),0), 0);
     let items = g.people.map(p => `<div class="summary-item"><div class="summary-label">${escHtml(p.name)}</div><div class="summary-val">${fmt(personTotal(p))}</div></div><div class="summary-divider"></div>`).join('');
     items += `<div class="summary-item"><div class="summary-label">Combined</div><div class="summary-val">${fmt(combined)}</div></div>`;
     area.innerHTML = `<div class="summary-strip">${items}</div>`;
@@ -800,7 +810,7 @@
     const net = {}; ids.forEach(a => { net[a]={}; ids.forEach(b => { net[a][b]=0; }); });
     g.people.forEach(creditor => {
       (creditor.entries||[]).forEach(e => {
-        if (e.ownShare || !e.debtorId) return;
+        if (e.ownShare || !e.debtorId || e.settled) return;
         const debtorId = e.debtorId;
         if (debtorId === creditor.id) return;
         net[debtorId][creditor.id] += parseFloat(e.amount);
@@ -874,7 +884,8 @@
           const singleId = e.id;
           const debtorName = g.people.length >= 3 && e.debtorId ? (g.people.find(x=>x.id===e.debtorId)?.name||'') : '';
           const debtLabel = debtorName ? ` · Owed by: ${escHtml(debtorName)}` : '';
-          html += `<div class="entry-item">
+          html += `<div class="entry-item${e.settled?' settled':''}">
+            <div class="settle-check${e.settled?' checked':''}" onclick="toggleEntrySettled('${person.id}','${singleId}')"></div>
             <div class="entry-left">
               <div class="entry-desc">${escHtml(e.desc)}</div>
               <div class="entry-date">${fmtDate(e.date)}${debtLabel}${e.origCurrency && e.origCurrency !== getBaseCurrency() ? ` · ${e.origAmount} ${e.origCurrency}` : ''}</div>
@@ -2046,8 +2057,10 @@
     const g = activeGroup(); if (!g) return;
     const person = g.people.find(p=>p.id===editingEntry.personId); if (!person) return;
 
-    // Find old groupId before removing
-    const oldGroupId = person.entries.find(e=>editingEntry.entryIds.includes(e.id))?.groupId;
+    // Find old groupId and settled state before removing
+    const oldEntries = person.entries.filter(e=>editingEntry.entryIds.includes(e.id));
+    const oldGroupId = oldEntries[0]?.groupId;
+    const wasSettled = oldEntries.length > 0 && oldEntries.every(e => e.settled);
     // Remove all old debtor entries in this bill
     person.entries = person.entries.filter(e => !editingEntry.entryIds.includes(e.id));
     // Remove matching ownShare entry by groupId
@@ -2058,28 +2071,62 @@
 
     if (owingPeople.length === 0) {
       // No one selected — just log own spend
-      person.entries.push({ id:uid(), date, desc, amount:total, debtorId:null, ownShare:true, origAmount:rawAmount, origCurrency:editCur });
+      person.entries.push({ id:uid(), date, desc, amount:total, debtorId:null, ownShare:true, origAmount:rawAmount, origCurrency:editCur, settled:wasSettled });
     } else if (editSplitMode === 'equal') {
       const totalPeople = owingPeople.length + 1;
       const share = parseFloat((total / totalPeople).toFixed(2));
-      person.entries.push({ id:uid(), date, desc, amount:share, debtorId:null, ownShare:true, groupId:gid, origAmount:rawAmount, origCurrency:editCur });
+      person.entries.push({ id:uid(), date, desc, amount:share, debtorId:null, ownShare:true, groupId:gid, origAmount:rawAmount, origCurrency:editCur, settled:wasSettled });
       owingPeople.forEach(other => {
-        person.entries.push({ id:uid(), date, desc, amount:share, debtorId:other.id, groupId:gid, origAmount:rawAmount, origCurrency:editCur });
+        person.entries.push({ id:uid(), date, desc, amount:share, debtorId:other.id, groupId:gid, origAmount:rawAmount, origCurrency:editCur, settled:wasSettled });
       });
     } else {
       const myShare = parseFloat(document.getElementById(`editrow_${editingEntry.personId}`)?.value||'0');
       if (!isNaN(myShare) && myShare > 0) {
-        person.entries.push({ id:uid(), date, desc, amount:myShare, debtorId:null, ownShare:true, groupId:gid, origAmount:rawAmount, origCurrency:editCur });
+        person.entries.push({ id:uid(), date, desc, amount:myShare, debtorId:null, ownShare:true, groupId:gid, origAmount:rawAmount, origCurrency:editCur, settled:wasSettled });
       }
       owingPeople.forEach(other => {
         const val = parseFloat(document.getElementById(`editrow_${other.id}`)?.value||'0');
         if (!isNaN(val) && val > 0) {
-          person.entries.push({ id:uid(), date, desc, amount:val, debtorId:other.id, groupId:gid, origAmount:rawAmount, origCurrency:editCur });
+          person.entries.push({ id:uid(), date, desc, amount:val, debtorId:other.id, groupId:gid, origAmount:rawAmount, origCurrency:editCur, settled:wasSettled });
         }
       });
     }
 
     closeEditEntry(); save(); renderPeople();
+  }
+
+  // ═══ SETTLE ENTRY ═══
+  function toggleEntrySettled(personId, entryId) {
+    const g = activeGroup(); if (!g) return;
+    const person = g.people.find(p=>p.id===personId); if (!person) return;
+    const entry = person.entries.find(e=>e.id===entryId); if (!entry) return;
+    // Also toggle ownShare sibling entry in the same group
+    if (entry.groupId) {
+      const sibling = person.entries.find(e => e.ownShare && e.groupId === entry.groupId);
+      if (sibling) sibling.settled = !entry.settled;
+    }
+    entry.settled = !entry.settled;
+    save(); renderPeople();
+  }
+
+  function toggleGroupSettled(personId, idsStr) {
+    const g = activeGroup(); if (!g) return;
+    const person = g.people.find(p=>p.id===personId); if (!person) return;
+    const ids = idsStr.split(',');
+    const entries = person.entries.filter(e=>ids.includes(e.id));
+    const allSettled = entries.every(e=>e.settled);
+    const newState = !allSettled;
+    ids.forEach(id => {
+      const entry = person.entries.find(e=>e.id===id);
+      if (entry) entry.settled = newState;
+    });
+    // Also toggle ownShare entry for the group
+    const groupId = entries[0]?.groupId;
+    if (groupId) {
+      const own = person.entries.find(e=>e.ownShare && e.groupId===groupId);
+      if (own) own.settled = newState;
+    }
+    save(); renderPeople();
   }
 
   // ═══ DELETE ENTRY / GROUP ═══
@@ -2148,7 +2195,8 @@
           if(e){
             const debtorName=g.people.length>=3&&e.debtorId?(g.people.find(x=>x.id===e.debtorId)?.name||''):'';
             const dh=debtorName?`<div style="font-size:10px;color:var(--muted);margin-top:3px">Owed by: ${escHtml(debtorName)}</div>`:'';
-            row+=`<td class="ov-td-desc">${escHtml(e.desc)}${dh}</td><td class="ov-td-amount">${fmt(e.amount)}</td>`;
+            const settledStyle = e.settled ? 'text-decoration:line-through;opacity:0.45' : '';
+            row+=`<td class="ov-td-desc" style="${settledStyle}">${escHtml(e.desc)}${dh}</td><td class="ov-td-amount" style="${settledStyle}">${fmt(e.amount)}</td>`;
           } else { row+=`<td class="ov-td-empty">—</td><td class="ov-td-empty">—</td>`; }
         });
         rows+=`<tr>${row}</tr>`;
