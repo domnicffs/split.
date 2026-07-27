@@ -864,7 +864,16 @@
       // Group by groupId if present, else each entry is its own group
       const groups = {};
       const groupOrder = [];
-      [...allEntries].reverse().forEach(e => {
+      // Sort by date descending (newest date first), then by insertion order within same date
+      const sorted = [...allEntries].sort((a, b) => {
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        const cmp = b.date.localeCompare(a.date);
+        if (cmp !== 0) return cmp;
+        return 0; // same date — keep original relative order (stable sort)
+      });
+      sorted.forEach(e => {
         const key = e.groupId || e.id; // each ungrouped entry gets its own key
         if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
         groups[key].push(e);
