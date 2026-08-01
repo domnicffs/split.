@@ -906,16 +906,19 @@
             </div>
           </div>`;
         } else {
-          // Grouped — one card with sub-rows per debtor
+          // Grouped — one card with sub-rows per debtor, each individually settleable
+          const groupSettled = grp.every(e => e.settled);
           const subRows = grp.map(e => {
             const debtorName = e.debtorId ? (g.people.find(x=>x.id===e.debtorId)?.name||'') : '';
-            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-top:1px solid var(--border)">
-              <div style="font-size:11px;color:var(--muted)">${escHtml(debtorName)}</div>
-              <div style="font-size:13px;font-weight:600;color:var(--accent2)">${fmt(e.amount)}</div>
+            const rowSettledStyle = e.settled ? 'text-decoration:line-through;opacity:0.5' : '';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border)">
+              <div class="settle-check${e.settled?' checked':''}" style="width:16px;height:16px;flex-shrink:0" onclick="toggleEntrySettled('${person.id}','${e.id}')"></div>
+              <div style="font-size:11px;color:var(--muted);flex:1;${rowSettledStyle}">${escHtml(debtorName)}</div>
+              <div style="font-size:13px;font-weight:600;color:var(--accent2);${rowSettledStyle}">${fmt(e.amount)}</div>
             </div>`;
           }).join('');
 
-          html += `<div class="entry-item" style="flex-direction:column;align-items:stretch;gap:6px">
+          html += `<div class="entry-item${groupSettled?' settled':''}" style="flex-direction:column;align-items:stretch;gap:6px">
             <div style="display:flex;align-items:center;gap:12px">
               <div class="entry-left">
                 <div class="entry-desc">${escHtml(first.desc)}</div>
@@ -1553,12 +1556,14 @@
     } else {
       const owingPeople = g.people.filter(p => selectedOwers.has(p.id));
       const gid = uid();
-      const myShare = parseFloat(document.getElementById(`custom_${creditor.id}`)?.value || '0');
+      const myShareRaw = document.getElementById(`custom_${creditor.id}`)?.value;
+      const myShare = (myShareRaw === '' || myShareRaw === undefined || myShareRaw === null) ? 0 : parseFloat(myShareRaw);
       if (!isNaN(myShare) && myShare > 0) {
         creditor.entries.push({ id:uid(), date, desc, amount:myShare, debtorId:null, ownShare:true, groupId:gid, origAmount:originalAmount, origCurrency:originalCurrency });
       }
       owingPeople.forEach(other => {
-        const val = parseFloat(document.getElementById(`custom_${other.id}`)?.value || '0');
+        const valRaw = document.getElementById(`custom_${other.id}`)?.value;
+        const val = (valRaw === '' || valRaw === undefined || valRaw === null) ? 0 : parseFloat(valRaw);
         if (!isNaN(val) && val > 0) {
           creditor.entries.push({ id:uid(), date, desc, amount:val, debtorId:other.id, groupId:gid, origAmount:originalAmount, origCurrency:originalCurrency });
         }
@@ -2089,12 +2094,14 @@
         person.entries.push({ id:uid(), date, desc, amount:share, debtorId:other.id, groupId:gid, origAmount:rawAmount, origCurrency:editCur, settled:wasSettled });
       });
     } else {
-      const myShare = parseFloat(document.getElementById(`editrow_${editingEntry.personId}`)?.value||'0');
+      const myShareRaw = document.getElementById(`editrow_${editingEntry.personId}`)?.value;
+      const myShare = (myShareRaw === '' || myShareRaw === undefined || myShareRaw === null) ? 0 : parseFloat(myShareRaw);
       if (!isNaN(myShare) && myShare > 0) {
         person.entries.push({ id:uid(), date, desc, amount:myShare, debtorId:null, ownShare:true, groupId:gid, origAmount:rawAmount, origCurrency:editCur, settled:wasSettled });
       }
       owingPeople.forEach(other => {
-        const val = parseFloat(document.getElementById(`editrow_${other.id}`)?.value||'0');
+        const valRaw = document.getElementById(`editrow_${other.id}`)?.value;
+        const val = (valRaw === '' || valRaw === undefined || valRaw === null) ? 0 : parseFloat(valRaw);
         if (!isNaN(val) && val > 0) {
           person.entries.push({ id:uid(), date, desc, amount:val, debtorId:other.id, groupId:gid, origAmount:rawAmount, origCurrency:editCur, settled:wasSettled });
         }
@@ -2109,31 +2116,18 @@
     const g = activeGroup(); if (!g) return;
     const person = g.people.find(p=>p.id===personId); if (!person) return;
     const entry = person.entries.find(e=>e.id===entryId); if (!entry) return;
-    // Also toggle ownShare sibling entry in the same group
+    const newState = !entry.settled;
+    entry.settled = newState;
+    // If this bill has only ONE debtor (2-person split), also toggle the shared ownShare
+    // entry since it represents the same single transaction. For 3+ person bills, the
+    // ownShare entry is shared across multiple debtors — only mark it settled once ALL
+    // debtor entries in that bill are individually settled.
     if (entry.groupId) {
-      const sibling = person.entries.find(e => e.ownShare && e.groupId === entry.groupId);
-      if (sibling) sibling.settled = !entry.settled;
-    }
-    entry.settled = !entry.settled;
-    save(); renderPeople();
-  }
-
-  function toggleGroupSettled(personId, idsStr) {
-    const g = activeGroup(); if (!g) return;
-    const person = g.people.find(p=>p.id===personId); if (!person) return;
-    const ids = idsStr.split(',');
-    const entries = person.entries.filter(e=>ids.includes(e.id));
-    const allSettled = entries.every(e=>e.settled);
-    const newState = !allSettled;
-    ids.forEach(id => {
-      const entry = person.entries.find(e=>e.id===id);
-      if (entry) entry.settled = newState;
-    });
-    // Also toggle ownShare entry for the group
-    const groupId = entries[0]?.groupId;
-    if (groupId) {
-      const own = person.entries.find(e=>e.ownShare && e.groupId===groupId);
-      if (own) own.settled = newState;
+      const siblingDebtors = person.entries.filter(e => !e.ownShare && e.groupId === entry.groupId);
+      const ownShareEntry = person.entries.find(e => e.ownShare && e.groupId === entry.groupId);
+      if (ownShareEntry) {
+        ownShareEntry.settled = siblingDebtors.every(e => e.settled);
+      }
     }
     save(); renderPeople();
   }
